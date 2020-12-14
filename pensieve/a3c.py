@@ -42,18 +42,18 @@ class A3C(object):
                 model==1 mean critic_td
                 model==2 mean only actor
                 '''
-                self.criticNetwork = CriticNetwork(
+                self.critic_network = CriticNetwork(
                     self.s_dim, self.a_dim).to(self.device)
-                self.criticOptim = torch.optim.RMSprop(
-                    self.criticNetwork.parameters(), lr=critic_lr, alpha=0.9,
+                self.critic_optim = torch.optim.RMSprop(
+                    self.critic_network.parameters(), lr=critic_lr, alpha=0.9,
                     eps=1e-10)
-                self.criticOptim.zero_grad()
+                self.critic_optim.zero_grad()
         else:
             self.actor_network.eval()
 
         self.loss_function = nn.MSELoss()
 
-    def getNetworkGradient(self, s_batch, a_batch, r_batch, terminal, epoch):
+    def get_network_gradient(self, s_batch, a_batch, r_batch, terminal, epoch):
         s_batch = torch.cat(s_batch).to(self.device)
         a_batch = torch.LongTensor(a_batch).to(self.device)
         r_batch = torch.tensor(r_batch).to(self.device)
@@ -65,7 +65,7 @@ class A3C(object):
 
         if self.model_type < 2:
             with torch.no_grad():
-                v_batch = self.criticNetwork.forward(
+                v_batch = self.critic_Network.forward(
                     s_batch).squeeze().to(self.device)
             td_batch = R_batch-v_batch
         else:
@@ -85,11 +85,11 @@ class A3C(object):
             if self.model_type == 0:
                 # original
                 critic_loss = self.loss_function(
-                    R_batch, self.criticNetwork.forward(s_batch).squeeze())
+                    R_batch, self.critic_network.forward(s_batch).squeeze())
             else:
                 # cricit_td
-                v_batch = self.criticNetwork.forward(s_batch[:-1]).squeeze()
-                next_v_batch = self.criticNetwork.forward(
+                v_batch = self.critic_network.forward(s_batch[:-1]).squeeze()
+                next_v_batch = self.critic_network.forward(
                     s_batch[1:]).squeeze().detach()
                 critic_loss = self.loss_function(
                     r_batch[:-1]+self.discount*next_v_batch, v_batch)
@@ -98,7 +98,7 @@ class A3C(object):
 
         # use the feature of accumulating gradient in pytorch
 
-    def actionSelect(self, stateInputs):
+    def select_action(self, stateInputs):
         if not self.is_central:
             with torch.no_grad():
                 stateInputs_gpu = stateInputs.to(self.device)
@@ -107,25 +107,25 @@ class A3C(object):
                 action = m.sample().item()
                 return action, probability.cpu().tolist()[0]
 
-    def hardUpdateActorNetwork(self, actor_net_params):
+    def hard_update_actor_network(self, actor_net_params):
         for target_param, source_param in zip(self.actor_network.parameters(),
                                               actor_net_params):
             target_param.data.copy_(source_param.data)
 
-    def updateNetwork(self):
+    def update_network(self):
         # use the feature of accumulating gradient in pytorch
         if self.is_central:
             self.actor_optim.step()
             self.actor_optim.zero_grad()
             if self.model_type < 2:
-                self.criticOptim.step()
-                self.criticOptim.zero_grad()
+                self.critic_optim.step()
+                self.critic_optim.zero_grad()
 
-    def getActorParam(self):
+    def get_actor_param(self):
         return list(self.actor_network.parameters())
 
-    def getCriticParam(self):
-        return list(self.criticNetwork.parameters())
+    def get_critic_param(self):
+        return list(self.critic_network.parameters())
 
 
 def compute_entropy(x):

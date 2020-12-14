@@ -79,7 +79,7 @@ class Environment(object):
         self._construct_bitrate_chunksize_map(video_size_file_dir)
 
         # get total number of chunks in a video
-        self.total_video_chunk = len(self.video_size[0])
+        self.total_video_chunk = len(self.video_size[0]) - 1
         if trace_video_same_duration_flag:
             # if the trace is longer than the video, extend the video
             self.total_video_chunk = max(
@@ -141,7 +141,7 @@ class Environment(object):
         the convention of ADR.
         """
         link_rtt = self.dimensions['link_rtt'].current_value  # millisec
-        buffer_thresh = self.dimensions['buffer_thresh'].current_value * \
+        buffer_thresh = self.dimensions['buffer_threshold'].current_value * \
             MILLISECONDS_IN_SECOND  # millisec, max buffer limit
         drain_buffer_sleep_time = self.dimensions[
             'drain_buffer_sleep_time'].current_value  # millisec
@@ -151,7 +151,7 @@ class Environment(object):
         assert 0 <= quality < len(VIDEO_BIT_RATE)
 
         video_chunk_size = self.video_size[quality][
-            self.nb_chunk_sent % len(self.video_size[quality])]
+            self.nb_chunk_sent % (len(self.video_size[quality])-1)]
 
         # use the delivery opportunity in mahimahi
         delay = 0.0  # in ms
@@ -241,7 +241,7 @@ class Environment(object):
         for i in range(len(VIDEO_BIT_RATE)):
             next_video_chunk_sizes.append(
                 self.video_size[i][
-                    self.nb_chunk_sent % len(self.video_size[0])])
+                    self.nb_chunk_sent % (len(self.video_size[i])-1)])
 
         return delay, \
             sleep_time, \
