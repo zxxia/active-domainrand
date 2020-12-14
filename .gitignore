@@ -111,3 +111,6 @@ venv.bak/
 diffsim.egg-info/
 results/real-robot/*.hdf5
 results/real-robot/*.hdf5.xz
+
+# coc local settings
+.vim
