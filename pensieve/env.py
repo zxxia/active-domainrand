@@ -4,10 +4,11 @@ import json
 import os
 
 import numpy as np
-from constants import (B_IN_MB, BITS_IN_BYTE, MILLISECONDS_IN_SECOND,
-                       NOISE_HIGH, NOISE_LOW, VIDEO_BIT_RATE, VIDEO_CHUNK_LEN)
-from dimension import Dimension
-from trace_generator import TraceGenerator
+from pensieve.constants import (B_IN_MB, BITS_IN_BYTE, MILLISECONDS_IN_SECOND,
+                                NOISE_HIGH, NOISE_LOW, VIDEO_BIT_RATE,
+                                VIDEO_CHUNK_LEN)
+from pensieve.dimension import Dimension
+from pensieve.trace_generator import TraceGenerator
 
 
 class Environment(object):

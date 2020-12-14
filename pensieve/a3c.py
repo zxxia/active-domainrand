@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from network import ActorNetwork, CriticNetwork
+from pensieve.network import ActorNetwork, CriticNetwork
 from torch.distributions import Categorical
 
 RAND_RANGE = 1000
