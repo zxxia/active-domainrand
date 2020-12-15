@@ -4,11 +4,14 @@ import json
 import os
 
 import numpy as np
-from pensieve.constants import (B_IN_MB, BITS_IN_BYTE, MILLISECONDS_IN_SECOND,
-                                NOISE_HIGH, NOISE_LOW, VIDEO_BIT_RATE,
-                                VIDEO_CHUNK_LEN)
+
+from pensieve.constants import (A_DIM, B_IN_MB, BITS_IN_BYTE,
+                                BUFFER_NORM_FACTOR, DEFAULT_QUALITY, M_IN_K,
+                                MILLISECONDS_IN_SECOND, NOISE_HIGH, NOISE_LOW,
+                                S_INFO, S_LEN, VIDEO_BIT_RATE, VIDEO_CHUNK_LEN)
 from pensieve.dimension import Dimension
 from pensieve.trace_generator import TraceGenerator
+from pensieve.utils import linear_reward
 
 
 class Environment(object):
@@ -72,7 +75,9 @@ class Environment(object):
         self.last_trace_ts = self.trace_time[self.trace_ptr - 1]
         self.nb_chunk_sent = 0
         self.buffer_size = 0
+        self.last_bitrate = DEFAULT_QUALITY
         self.fixed = fixed
+        self.state = np.zeros((1, S_INFO, S_LEN))
 
         # a dict mapping bitrate to vidoe chunk size in bytes
         self.video_size = {}
@@ -134,14 +139,17 @@ class Environment(object):
         self.last_trace_ts = self.trace_time[self.trace_ptr - 1]
         self.nb_chunk_sent = 0
         self.buffer_size = 0
+        self.last_bitrate = DEFAULT_QUALITY
+        self.state = np.zeros((1, S_INFO, S_LEN))
 
-    def step(self, quality):
+    def step(self, bitrate):
         """Step the environment by inputting an action.
 
         Read the network trace and transmit a video chunk. The funcition is
         renamed from get_video_chunk in old pensieve code to be compatible with
         the convention of ADR.
         """
+        self.state = np.roll(self.state, -1, -1)
         link_rtt = self.dimensions['link_rtt'].current_value  # millisec
         buffer_thresh = self.dimensions['buffer_threshold'].current_value * \
             MILLISECONDS_IN_SECOND  # millisec, max buffer limit
@@ -150,10 +158,10 @@ class Environment(object):
         packet_payload_portion = self.dimensions[
             'packet_payload_portion'].current_value
 
-        assert 0 <= quality < len(VIDEO_BIT_RATE)
+        assert 0 <= bitrate < len(VIDEO_BIT_RATE)
 
-        video_chunk_size = self.video_size[quality][
-            self.nb_chunk_sent % (len(self.video_size[quality])-1)]
+        video_chunk_size = self.video_size[bitrate][
+            self.nb_chunk_sent % (len(self.video_size[bitrate])-1)]
 
         # use the delivery opportunity in mahimahi
         delay = 0.0  # in ms
@@ -237,6 +245,8 @@ class Environment(object):
         self.nb_chunk_sent += 1
         video_chunk_remain = self.total_video_chunk - self.nb_chunk_sent
 
+        # whether it’s time to reset the environment again.
+        # (https://gym.openai.com/docs/#spaces)
         end_of_video = self.nb_chunk_sent >= self.total_video_chunk
 
         next_video_chunk_sizes = []
@@ -245,11 +255,26 @@ class Environment(object):
                 self.video_size[i][
                     self.nb_chunk_sent % (len(self.video_size[i])-1)])
 
-        return delay, \
-            sleep_time, \
-            return_buffer_size / MILLISECONDS_IN_SECOND, \
-            rebuf / MILLISECONDS_IN_SECOND, \
-            video_chunk_size, \
-            next_video_chunk_sizes, \
-            end_of_video, \
-            video_chunk_remain
+        rebuf = rebuf / MILLISECONDS_IN_SECOND
+
+        reward = linear_reward(bitrate, self.last_bitrate, rebuf)
+        self.last_bitrate = bitrate
+
+        self.state[0, 0, -1] = VIDEO_BIT_RATE[bitrate] / np.max(VIDEO_BIT_RATE)
+        self.state[0, 1, -1] = return_buffer_size / MILLISECONDS_IN_SECOND / \
+            BUFFER_NORM_FACTOR
+        self.state[0, 2, -1] = video_chunk_size / delay / M_IN_K  # kbyte/ms
+        self.state[0, 3, -1] = delay / M_IN_K / BUFFER_NORM_FACTOR  # 10 sec
+        self.state[0, 4, :A_DIM] = np.array(
+            next_video_chunk_sizes) / M_IN_K / M_IN_K
+        self.state[0, 5, -1] = video_chunk_remain / self.total_video_chunk
+
+        debug_info = {'delay': delay,
+                      'sleep_time': sleep_time,
+                      'buffer_size': return_buffer_size/MILLISECONDS_IN_SECOND,
+                      'rebuf': rebuf,
+                      'video_chunk_size': video_chunk_size,
+                      'next_video_chunk_sizes': next_video_chunk_sizes,
+                      'video_chunk_remain': video_chunk_remain}
+
+        return self.state, reward, end_of_video, debug_info

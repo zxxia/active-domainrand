@@ -88,13 +88,13 @@ class A3C(object):
         # use the feature of accumulating gradient in pytorch
 
     def select_action(self, stateInputs):
-        if not self.is_central:
-            with torch.no_grad():
-                stateInputs_gpu = stateInputs.to(self.device)
-                probability = self.actor_network.forward(stateInputs_gpu)
-                m = Categorical(probability)
-                action = m.sample().item()
-                return action, probability.cpu().tolist()[0]
+        # if not self.is_central:
+        with torch.no_grad():
+            stateInputs_gpu = stateInputs.to(self.device)
+            probability = self.actor_network.forward(stateInputs_gpu)
+            m = Categorical(probability)
+            action = m.sample().item()
+            return action, probability.cpu().tolist()[0]
 
     def hard_update_actor_network(self, actor_net_params):
         for target_param, source_param in zip(self.actor_network.parameters(),

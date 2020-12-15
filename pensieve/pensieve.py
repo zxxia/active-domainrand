@@ -43,7 +43,6 @@ class Pensieve(object):
         self.epoch = 0  # track how many epochs the models have been trained
 
     def train(self, net_envs, iters):
-        # TODO: collect the trajectories and return after training
         # inter-process communication queues
         net_params_queues = []
         exp_queues = []
@@ -140,6 +139,10 @@ class Pensieve(object):
 
     def select_action(self, state):
         # bitrate, action_prob_vec
+        if isinstance(state, np.ndarray):
+            state = torch.from_numpy(state).type('torch.FloatTensor')
+        if not torch.is_tensor(state):
+            raise TypeError
         bit_rate, _ = self.net.select_action(state)
         return bit_rate
 
@@ -269,13 +272,12 @@ def agent(agent_id, net_params_queue, exp_queue, iters, net_envs, summary_dir):
             if actor_net_params == "exit":
                 break
             net.hard_update_actor_network(actor_net_params)
-            last_bit_rate = DEFAULT_QUALITY
             bit_rate = DEFAULT_QUALITY
             s_batch = []
             a_batch = []
             r_batch = []
             entropy_record = []
-            state = torch.zeros((1, S_INFO, S_LEN))
+            # state = torch.zeros((1, S_INFO, S_LEN))
 
             env_idx = np.random.randint(len(net_envs))
             net_env = net_envs[env_idx]
@@ -284,40 +286,20 @@ def agent(agent_id, net_params_queue, exp_queue, iters, net_envs, summary_dir):
 
             # the action is from the last decision
             # this is to make the framework similar to the real
-            delay, sleep_time, buffer_size, rebuf, \
-                video_chunk_size, next_video_chunk_sizes, \
-                end_of_video, video_chunk_remain = net_env.step(bit_rate)
+            state, reward, end_of_video, info = net_env.step(bit_rate)
+            state = torch.from_numpy(state).type('torch.FloatTensor')
 
-            time_stamp += delay  # in ms
-            time_stamp += sleep_time  # in ms
+            time_stamp += info['delay']  # in ms
+            time_stamp += info['sleep_time']  # in ms
 
             while not end_of_video and len(s_batch) < TRAIN_SEQ_LEN:
-                last_bit_rate = bit_rate
-
-                state = state.clone().detach()
-
-                state = torch.roll(state, -1, dims=-1)
-
-                state[0, 0, -1] = VIDEO_BIT_RATE[bit_rate] / \
-                    float(np.max(VIDEO_BIT_RATE))  # last quality
-                state[0, 1, -1] = buffer_size / BUFFER_NORM_FACTOR  # 10 sec
-                state[0, 2, -1] = float(video_chunk_size) / \
-                    float(delay) / M_IN_K  # kilo byte / ms
-                state[0, 3, -1] = float(delay) / M_IN_K / \
-                    BUFFER_NORM_FACTOR  # 10 sec
-                state[0, 4, :A_DIM] = torch.tensor(
-                    next_video_chunk_sizes) / M_IN_K / M_IN_K  # mega byte
-                state[0, 5, -1] = video_chunk_remain/net_env.total_video_chunk
-
                 bit_rate, action_prob_vec = net.select_action(state)
                 # Note: we need to discretize the probability into 1/RAND_RANGE
                 # steps, because there is an intrinsic discrepancy in passing
                 # single state and batch states
 
-                delay, sleep_time, buffer_size, rebuf, \
-                    video_chunk_size, next_video_chunk_sizes, \
-                    end_of_video, video_chunk_remain = net_env.step(bit_rate)
-                reward = linear_reward(bit_rate, last_bit_rate, rebuf)
+                state, reward, end_of_video, info = net_env.step(bit_rate)
+                state = torch.from_numpy(state).type('torch.FloatTensor')
 
                 s_batch.append(state)
                 a_batch.append(bit_rate)
@@ -326,8 +308,9 @@ def agent(agent_id, net_params_queue, exp_queue, iters, net_envs, summary_dir):
 
                 # log time_stamp, bit_rate, buffer_size, reward
                 csv_writer.writerow([time_stamp, VIDEO_BIT_RATE[bit_rate],
-                                     buffer_size, rebuf, video_chunk_size,
-                                     delay, reward, epoch, env_idx])
+                                     info['buffer_size'], info['rebuf'],
+                                     info['video_chunk_size'], info['delay'],
+                                     reward, epoch, env_idx])
             # print('agent_{} put {}'.format(agent_id, len(s_batch)))
             exp_queue.put([s_batch,  # ignore the first chuck
                            a_batch,  # since we don't have the
