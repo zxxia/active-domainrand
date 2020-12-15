@@ -130,8 +130,10 @@ class Environment(object):
 
     def reset(self, **kwargs):
         """Reset the environment paramters to default values."""
-        # TODO: reset the environment paramters.
-        raise NotImplementedError
+        self.trace_ptr = 1
+        self.last_trace_ts = self.trace_time[self.trace_ptr - 1]
+        self.nb_chunk_sent = 0
+        self.buffer_size = 0
 
     def step(self, quality):
         """Step the environment by inputting an action.

@@ -1,8 +1,11 @@
+import os
+
 import numpy as np
 import torch
 import torch.nn as nn
-from pensieve.network import ActorNetwork, CriticNetwork
 from torch.distributions import Categorical
+
+from pensieve.network import ActorNetwork, CriticNetwork
 
 RAND_RANGE = 1000
 
@@ -13,14 +16,13 @@ def entropy_weight_decay_func(epoch):
 
 
 class A3C(object):
-    def __init__(self, is_central, model_type, s_dim, action_dim,
+    def __init__(self, is_central, s_dim, action_dim,
                  actor_lr=1e-4, critic_lr=1e-3):
         self.s_dim = s_dim
         self.a_dim = action_dim
         self.discount = 0.99
         self.entropy_weight = 0.5
         self.entropy_eps = 1e-6
-        self.model_type = model_type
 
         self.is_central = is_central
         # self.device=torch.device("cuda:0" if torch.cuda.is_available() else
@@ -36,19 +38,17 @@ class A3C(object):
                 self.actor_network.parameters(), lr=actor_lr, alpha=0.9,
                 eps=1e-10)
             self.actor_optim.zero_grad()
-            if model_type < 2:
-                '''
-                model==0 mean original
-                model==1 mean critic_td
-                model==2 mean only actor
-                '''
-                self.critic_network = CriticNetwork(
-                    self.s_dim, self.a_dim).to(self.device)
-                self.critic_optim = torch.optim.RMSprop(
-                    self.critic_network.parameters(), lr=critic_lr, alpha=0.9,
-                    eps=1e-10)
-                self.critic_optim.zero_grad()
+
+            self.critic_network = CriticNetwork(
+                self.s_dim, self.a_dim).to(self.device)
+            self.critic_optim = torch.optim.RMSprop(
+                self.critic_network.parameters(), lr=critic_lr, alpha=0.9,
+                eps=1e-10)
+            self.critic_optim.zero_grad()
         else:
+            self.actor_optim = None
+            self.critic_network = None
+            self.critic_optim = None
             self.actor_network.eval()
 
         self.loss_function = nn.MSELoss()
@@ -63,13 +63,12 @@ class A3C(object):
         for t in reversed(range(r_batch.shape[0]-1)):
             R_batch[t] = r_batch[t] + self.discount*R_batch[t+1]
 
-        if self.model_type < 2:
-            with torch.no_grad():
-                v_batch = self.critic_Network.forward(
-                    s_batch).squeeze().to(self.device)
-            td_batch = R_batch-v_batch
-        else:
-            td_batch = R_batch
+        with torch.no_grad():
+            v_batch = self.critic_network.forward(
+                s_batch).squeeze().to(self.device)
+        td_batch = R_batch-v_batch
+        # else:
+        #     td_batch = R_batch
 
         probability = self.actor_network.forward(s_batch)
         m_probs = Categorical(probability)
@@ -81,20 +80,10 @@ class A3C(object):
         actor_loss = actor_loss+entropy_loss
         actor_loss.backward()
 
-        if self.model_type < 2:
-            if self.model_type == 0:
-                # original
-                critic_loss = self.loss_function(
-                    R_batch, self.critic_network.forward(s_batch).squeeze())
-            else:
-                # cricit_td
-                v_batch = self.critic_network.forward(s_batch[:-1]).squeeze()
-                next_v_batch = self.critic_network.forward(
-                    s_batch[1:]).squeeze().detach()
-                critic_loss = self.loss_function(
-                    r_batch[:-1]+self.discount*next_v_batch, v_batch)
+        critic_loss = self.loss_function(
+            R_batch, self.critic_network.forward(s_batch).squeeze())
 
-            critic_loss.backward()
+        critic_loss.backward()
 
         # use the feature of accumulating gradient in pytorch
 
@@ -117,15 +106,31 @@ class A3C(object):
         if self.is_central:
             self.actor_optim.step()
             self.actor_optim.zero_grad()
-            if self.model_type < 2:
-                self.critic_optim.step()
-                self.critic_optim.zero_grad()
+            self.critic_optim.step()
+            self.critic_optim.zero_grad()
 
     def get_actor_param(self):
         return list(self.actor_network.parameters())
 
     def get_critic_param(self):
-        return list(self.critic_network.parameters())
+        if self.is_central:
+            return list(self.critic_network.parameters())
+
+    def load_actor_model(self, actor_model_path):
+        self.actor_network.load_state_dict(torch.load(actor_model_path))
+
+    def load_critic_model(self, critic_model_path):
+        if self.is_central:
+            self.critic_network.load_state_dict(torch.load(critic_model_path))
+
+    def save_actor_model(self, model_save_path):
+        torch.save(self.actor_network.state_dict(),
+                   os.path.join(model_save_path, "pensieve_actor.pth"))
+
+    def save_critic_model(self, model_save_path):
+        if self.is_central:
+            torch.save(self.critic_network.state_dict(),
+                       os.path.join(model_save_path, "pensieve_critic.pth"))
 
 
 def compute_entropy(x):

@@ -26,3 +26,4 @@ TOTAL_VIDEO_CHUNK = 48
 PACKET_SIZE = 1500  # bytes
 NOISE_LOW = 0.9
 NOISE_HIGH = 1.1
+TRAIN_SEQ_LEN = 100  # batchsize of pensieve training
