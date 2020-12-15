@@ -179,64 +179,78 @@ def hd_reward(current_bitrate_idx, last_bitrate_idx, rebuffer):
     return reward
 
 
-LUNAR_LANDER_SOLVED_SCORE = 200.0
-ERGO_SOLVED_DISTANCE = 0.025
-PUSHER_SOLVED_DISTANCE = 0.25  # Radius=0.17
-
-
-def evaluate_policy(nagents, env, agent_policy, eval_episodes, max_steps,
-                    freeze_agent=True, return_rewards=False, add_noise=False,
-                    log_distances=True, gail_rewarder=None, noise_scale=0.1,
-                    min_buffer_len=1000):
-    """Evaluate a given policy in a particular environment.
+def evaluate_policy(nagents, net_envs, agent_policy, replay_buffer,
+                    eval_episodes, max_steps, freeze_agent=True,
+                    return_rewards=False,
+                    add_noise=False, log_distances=True,  # gail_rewarder=None,
+                    noise_scale=0.1, min_buffer_len=1000):
+    """Evaluate a given policy in a set of environments.
 
     Return an array of rewards received from the evaluation step.
     """
-    states = [[] for _ in range(nagents)]
-    actions = [[] for _ in range(nagents)]
-    next_states = [[] for _ in range(nagents)]
-    rewards = [[] for _ in range(nagents)]
+    # TODO: environemnts have the same random seed. Need to fix, consider
+    # multiproc
+    # warning: runnable but may have logic errors Double check the logic.
+    assert nagents == len(net_envs)
+    states_list = [[] for _ in range(nagents)]
+    actions_list = [[] for _ in range(nagents)]
+    next_states_list = [[] for _ in range(nagents)]
+    rewards_list = [[] for _ in range(nagents)]
     ep_rewards = []
     final_dists = []
 
     for ep in range(eval_episodes):
         agent_total_rewards = np.zeros(nagents)
-        state = env.reset()
+        states = []
+        rewards = []
+        actions = []
+        dones = []
+        infos = []
+        for net_env in net_envs:
+            net_env.reset()
+            state, reward, done, info = net_env.step(1)
+            states.append(state)
+            rewards.append(reward)
+            dones.append(done)
+            infos.append(info)
 
-        done = [False] * nagents
+        # done = [False] * nagents
         add_to_buffer = [True] * nagents
         steps = 0
         training_iters = 0
 
-        while not all(done) and steps <= max_steps:
-            action = agent_policy.select_action(np.array(state))
+        while not all(dones) and steps <= max_steps:
+            actions = []
+            for state in states:
+                actions.append(agent_policy.select_action(state))
 
-            if add_noise:
-                action = action + \
-                    np.random.normal(0, noise_scale, size=action.shape)
-                action = action.clip(-1, 1)
+            next_states = []
+            rewards = []
+            dones = []
+            infos = []
+            for net_env, action in zip(net_envs, actions):
+                next_state, reward, done, info = net_env.step(action)
+                next_states.append(next_state)
+                rewards.append(reward)
+                dones.append(done)
+                infos.append(info)
 
-            next_state, reward, done, info = env.step(action)
-            if gail_rewarder is not None:
-                reward = gail_rewarder.get_reward(
-                    np.concatenate([state, action], axis=-1))
-
-            for i, st in enumerate(state):
+            for i, st in enumerate(states):
                 if add_to_buffer[i]:
-                    states[i].append(st)
-                    actions[i].append(action[i])
-                    next_states[i].append(next_state[i])
-                    rewards[i].append(reward[i])
-                    agent_total_rewards[i] += reward[i]
+                    states_list[i].append(st)
+                    actions_list[i].append(actions[i])
+                    next_states_list[i].append(next_states[i])
+                    rewards_list[i].append(rewards[i])
+                    agent_total_rewards[i] += rewards[i]
                     training_iters += 1
 
-                    if replay_buffer is not None:
-                        done_bool = 0 if steps + \
-                            1 == max_steps else float(done[i])
-                        replay_buffer.add(
-                            (state[i], next_state[i], action[i], reward[i], done_bool))
+                    # if replay_buffer is not None:
+                    #     done_bool = 0 if steps + \
+                    #         1 == max_steps else float(done[i])
+                    #     replay_buffer.add(
+                    #         (state[i], next_state[i], action[i], reward[i], done_bool))
 
-                if done[i]:
+                if dones[i]:
                     # Avoid duplicates
                     add_to_buffer[i] = False
 
@@ -247,9 +261,11 @@ def evaluate_policy(nagents, env, agent_policy, eval_episodes, max_steps,
             steps += 1
 
         # Train for total number of env iterations
-        if not freeze_agent and len(replay_buffer.storage) > min_buffer_len:
-            agent_policy.train(replay_buffer=replay_buffer,
-                               iterations=training_iters)
+        # and len(replay_buffer.storage) > min_buffer_len:
+        if not freeze_agent:
+            # agent_policy.train(replay_buffer=replay_buffer,
+            #                    iterations=training_iters)
+            agent_policy.train(net_envs, iters=training_iters)
 
         ep_rewards.append(agent_total_rewards)
 
@@ -258,27 +274,17 @@ def evaluate_policy(nagents, env, agent_policy, eval_episodes, max_steps,
 
     trajectories = []
     for i in range(nagents):
+        # print(np.array(states_list[i])[:, 0, :, -1].shape)
+        # print(np.array(actions_list[i]).reshape((-1, 1)).shape)
+        # print(np.array(next_states_list[i])[:, 0, :, -1].shape)
+        # TODO: what states to use here
+        # pensive models take a matrix as state
+        # here only takes the latest state
         trajectories.append(np.concatenate(
             [
-                np.array(states[i]),
-                np.array(actions[i]),
-                np.array(next_states[i])
+                np.array(states_list[i])[:, 0, :, -1],
+                np.array(actions_list[i]).reshape((-1, 1)),
+                np.array(next_states_list[i])[:, 0, :, -1]
             ], axis=-1))
 
     return trajectories
-
-
-def check_solved(env_name, criteria):
-    if env_name.find('Lunar') != -1:
-        return np.median(criteria) > LUNAR_LANDER_SOLVED_SCORE
-    elif env_name.find('Ergo') != -1:
-        return np.median(criteria) < ERGO_SOLVED_DISTANCE
-    else:
-        return np.median(criteria) < PUSHER_SOLVED_DISTANCE
-
-
-def check_new_best(env_name, new, current):
-    if env_name.find('Lunar') != -1:
-        return new > current
-    else:
-        return new < current

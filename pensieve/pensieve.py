@@ -229,8 +229,8 @@ def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
 
         if (epoch+1) % model_save_interval == 0:
             # Save the neural net parameters to disk.
-            print("\nTrain epoch: {}, time use: {}s".format(
-                epoch + 1, time.time() - t_start))
+            print("\nTrain epoch: {}/{}, time use: {}s".format(
+                epoch + 1, iters, time.time() - t_start))
             t_start = time.time()
             net.save_critic_model(summary_dir)
             net.save_actor_model(summary_dir)
