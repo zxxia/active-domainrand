@@ -179,7 +179,7 @@ def hd_reward(current_bitrate_idx, last_bitrate_idx, rebuffer):
     return reward
 
 
-def evaluate_policy(nagents, net_envs, agent_policy, replay_buffer,
+def evaluate_policy(nagents, net_envs, agent_policy,  # replay_buffer,
                     eval_episodes, max_steps, freeze_agent=True,
                     return_rewards=False,
                     add_noise=False, log_distances=True,  # gail_rewarder=None,

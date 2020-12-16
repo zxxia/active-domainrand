@@ -43,6 +43,8 @@ class Pensieve(object):
         self.epoch = 0  # track how many epochs the models have been trained
 
     def train(self, net_envs, iters):
+        for net_env in net_envs:
+            net_env.reset()
         # inter-process communication queues
         net_params_queues = []
         exp_queues = []
