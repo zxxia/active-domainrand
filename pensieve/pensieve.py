@@ -28,6 +28,8 @@ class Pensieve(object):
             critic_path(None or str): path to a critic checkpoint to be loaded.
             model_save_interval(int): the period of caching model checkpoints.
         """
+        # https://github.com/pytorch/pytorch/issues/3966
+        mp.set_start_method("spawn")
         self.num_agents = num_agents
 
         self.net = A3C(True, [S_INFO, S_LEN], A_DIM,

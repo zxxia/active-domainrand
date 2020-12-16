@@ -25,4 +25,4 @@ for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
     net_envs.append(net_env)
 
 # pensieve_abr.train(net_envs, 15)
-evaluate_policy(10, net_envs, pensieve_abr, None, eval_episodes=1, max_steps=10, freeze_agent=False)
+evaluate_policy(10, net_envs, pensieve_abr, eval_episodes=1, max_steps=10, freeze_agent=False)
