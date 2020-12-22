@@ -9,13 +9,14 @@ import torch
 import torch.multiprocessing as mp
 
 from pensieve.a3c import A3C, compute_entropy
+from pensieve.agent_policy import BaseAgentPolicy
 from pensieve.constants import (A_DIM, ACTOR_LR_RATE, BUFFER_NORM_FACTOR,
                                 CRITIC_LR_RATE, DEFAULT_QUALITY, M_IN_K,
                                 S_INFO, S_LEN, TRAIN_SEQ_LEN, VIDEO_BIT_RATE)
 from pensieve.utils import linear_reward
 
 
-class Pensieve(object):
+class Pensieve(BaseAgentPolicy):
     def __init__(self, num_agents, log_dir, actor_path=None,
                  critic_path=None, model_save_interval=100):
         """Construct Pensieve object.
@@ -68,7 +69,7 @@ class Pensieve(object):
         for i in range(self.num_agents):
             agents.append(mp.Process(target=agent,
                                      args=(i, net_params_queues[i],
-                                           exp_queues[i], iters, net_envs,
+                                           exp_queues[i], net_envs,
                                            self.log_dir)))
         for i in range(self.num_agents):
             agents[i].start()
@@ -80,66 +81,35 @@ class Pensieve(object):
 
         self.epoch += iters
 
+    def evaluate(self, net_env):
+        net_env.reset()
+        time_stamp = 0
+        last_bit_rate = DEFAULT_QUALITY
+        bit_rate = DEFAULT_QUALITY
+        state = torch.zeros((S_INFO, S_LEN))
+        while True:  # serve video forever
+            # the action is from the last decision
+            # this is to make the framework similar to the real
+            state, reward, end_of_video, info = net_env.step(bit_rate)
+
+            time_stamp += info['delay']  # in ms
+            time_stamp += info['sleep_time']  # in ms
+
+            last_bit_rate = bit_rate
+
+            bit_rate, action_prob_vec = self.select_action(state)
+
+            if end_of_video:
+                break
+        # TODO: return trajectory
+        raise NotImplementedError
+
     def test(self, net_envs):
         for net_env in net_envs:
-            net_env.reset()
-            time_stamp = 0
-            last_bit_rate = DEFAULT_QUALITY
-            bit_rate = DEFAULT_QUALITY
-            state = torch.zeros((S_INFO, S_LEN))
-            log_path = os.path.join(
-                self.summary_dir, 'log_sim_rl_' + net_env.filename)
-            with open(log_path, 'w', 1) as f:
-                csv_writer = csv.writer(f, delimiter='\t')
-                while True:  # serve video forever
-                    # the action is from the last decision
-                    # this is to make the framework similar to the real
-                    delay, sleep_time, buffer_size, rebuf, \
-                        video_chunk_size, next_video_chunk_sizes, \
-                        end_of_video, video_chunk_remain = net_env.step(
-                            bit_rate)
+            self.evaluate(net_env)
 
-                    time_stamp += delay  # in ms
-                    time_stamp += sleep_time  # in ms
-
-                    # reward is video quality - rebuffer penalty - smoothness
-                    reward = linear_reward(bit_rate, last_bit_rate, rebuf)
-
-                    last_bit_rate = bit_rate
-
-                    # log time_stamp, bit_rate, buffer_size, reward
-                    csv_writer.writerow([time_stamp / M_IN_K,
-                                         VIDEO_BIT_RATE[bit_rate],
-                                         buffer_size, rebuf, video_chunk_size,
-                                         delay, reward])
-
-                    # retrieve previous state
-                    state = torch.roll(state, -1, dims=-1)
-
-                    # this should be S_INFO number of terms
-                    state[0, -1] = VIDEO_BIT_RATE[bit_rate] / \
-                        float(np.max(VIDEO_BIT_RATE))  # last quality
-                    state[1, -1] = buffer_size / BUFFER_NORM_FACTOR  # 10 sec
-                    state[2, -1] = float(video_chunk_size) / \
-                        float(delay) / M_IN_K  # kilo byte / ms
-                    state[3, -1] = float(delay) / M_IN_K / \
-                        BUFFER_NORM_FACTOR  # 10 sec
-                    state[4, :A_DIM] = torch.tensor(
-                        next_video_chunk_sizes) / M_IN_K / M_IN_K  # mega byte
-                    state[5, -1] = video_chunk_remain / \
-                        net_env.total_video_chunk
-
-                    with torch.no_grad():
-                        probability = self.net.forward(state.unsqueeze(0))
-                        # m = Categorical(probability)
-                        # bit_rate = m.sample().item()
-                        bit_rate = probability.argmax().item()
-                    # Note: we need to discretize the probability into
-                    # 1/RAND_RANGE steps, because there is an intrinsic
-                    # discrepancy in passing single state and batch states
-
-                    if end_of_video:
-                        break
+            raise NotImplementedError
+        # TODO: return trajectories consider multiprocessing
 
     def select_action(self, state):
         # bitrate, action_prob_vec
@@ -151,10 +121,12 @@ class Pensieve(object):
         return bit_rate
 
     def save_models(self, model_save_path):
+        """Save models to a directory."""
         self.net.save_actor_model(model_save_path)
         self.net.save_critic_model(model_save_path)
 
     def load_models(self, actor_model_path, critic_model_path):
+        """Load models from given paths."""
         if actor_model_path is not None:
             self.net.load_actor_model(actor_model_path)
         if critic_model_path is not None:
@@ -250,7 +222,7 @@ def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
         net_params_queues[i].put("exit")
 
 
-def agent(agent_id, net_params_queue, exp_queue, iters, net_envs, summary_dir):
+def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir):
     torch.set_num_threads(1)
     # set random seed
     np.random.seed(agent_id)

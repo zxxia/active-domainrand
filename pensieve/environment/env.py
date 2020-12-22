@@ -9,12 +9,12 @@ from pensieve.constants import (A_DIM, B_IN_MB, BITS_IN_BYTE,
                                 BUFFER_NORM_FACTOR, DEFAULT_QUALITY, M_IN_K,
                                 MILLISECONDS_IN_SECOND, NOISE_HIGH, NOISE_LOW,
                                 S_INFO, S_LEN, VIDEO_BIT_RATE, VIDEO_CHUNK_LEN)
-from pensieve.dimension import Dimension
+from pensieve.environment.dimension import Dimension
 from pensieve.trace_generator import TraceGenerator
 from pensieve.utils import linear_reward
 
 
-class Environment(object):
+class Environment:
     """Simulated network environment for Pensieve."""
 
     def __init__(self, video_size_file_dir, config_file, seed, trace_time=None,
@@ -186,7 +186,7 @@ class Environment(object):
                     throughput / packet_payload_portion
                 delay += fractional_time
                 self.last_trace_ts += fractional_time
-                assert(self.last_trace_ts <= self.trace_time[self.trace_ptr])
+                assert self.last_trace_ts <= self.trace_time[self.trace_ptr]
                 break
 
             bytes_sent += packet_payload
