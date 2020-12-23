@@ -4,6 +4,7 @@ import os
 import numpy as np
 import random
 
+from numba import jit
 from pensieve.constants import (VIDEO_BIT_RATE, HD_REWARD, SMOOTH_PENALTY,
                                 REBUF_PENALTY, M_IN_K)
 
@@ -144,9 +145,8 @@ def adjust_n_random_traces(all_ts, all_bw, random_seed, robust_noise, sample_len
     return new_all_ts, new_all_bw
 
 
-def linear_reward(current_bitrate_idx, last_bitrate_idx, rebuffer):
-    current_bitrate = VIDEO_BIT_RATE[current_bitrate_idx]
-    last_bitrate = VIDEO_BIT_RATE[last_bitrate_idx]
+@jit(nopython=True)
+def linear_reward(current_bitrate, last_bitrate, rebuffer):
     reward = current_bitrate / M_IN_K - REBUF_PENALTY * rebuffer - \
         SMOOTH_PENALTY * np.abs(current_bitrate - last_bitrate) / M_IN_K
     return reward

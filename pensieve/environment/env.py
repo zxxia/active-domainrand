@@ -263,7 +263,8 @@ class Environment:
 
         rebuf = rebuf / MILLISECONDS_IN_SECOND
 
-        reward = linear_reward(bitrate, self.last_bitrate, rebuf)
+        reward = linear_reward(VIDEO_BIT_RATE[bitrate],
+                               VIDEO_BIT_RATE[self.last_bitrate], rebuf)
         self.last_bitrate = bitrate
 
         self.state[0, 0, -1] = VIDEO_BIT_RATE[bitrate] / np.max(VIDEO_BIT_RATE)

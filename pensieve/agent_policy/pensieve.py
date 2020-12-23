@@ -10,10 +10,9 @@ import torch.multiprocessing as mp
 
 from pensieve.a3c import A3C, compute_entropy
 from pensieve.agent_policy import BaseAgentPolicy
-from pensieve.constants import (A_DIM, ACTOR_LR_RATE, BUFFER_NORM_FACTOR,
-                                CRITIC_LR_RATE, DEFAULT_QUALITY, M_IN_K,
+from pensieve.constants import (A_DIM, ACTOR_LR_RATE,
+                                CRITIC_LR_RATE, DEFAULT_QUALITY,
                                 S_INFO, S_LEN, TRAIN_SEQ_LEN, VIDEO_BIT_RATE)
-from pensieve.utils import linear_reward
 
 
 class Pensieve(BaseAgentPolicy):
