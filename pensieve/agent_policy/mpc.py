@@ -8,14 +8,16 @@ from numba import jit
 
 from pensieve.agent_policy import BaseAgentPolicy
 from pensieve.constants import (A_DIM, B_IN_MB, DEFAULT_QUALITY, M_IN_K,
-                                REBUF_PENALTY, S_INFO, S_LEN, SMOOTH_PENALTY,
-                                TOTAL_VIDEO_CHUNK, VIDEO_BIT_RATE)
+                                MILLISECONDS_IN_SECOND, REBUF_PENALTY, S_INFO,
+                                S_LEN, TOTAL_VIDEO_CHUNK, VIDEO_BIT_RATE,
+                                VIDEO_CHUNK_LEN)
 from pensieve.environment import Environment
+from pensieve.utils import linear_reward
 
 VIDEO_BIT_RATE = np.array(VIDEO_BIT_RATE)  # Kbps
 
 
-class RobustMPC:
+class RobustMPC(BaseAgentPolicy):
     """Naive implementation of RobustMPC."""
 
     def __init__(self, mpc_future_chunk_cnt=5):
@@ -27,6 +29,9 @@ class RobustMPC:
         self.chunk_combo_options = np.array(
             [combo for combo in itertools.product(
                 range(len(VIDEO_BIT_RATE)), repeat=self.mpc_future_chunk_cnt)])
+        raise NotImplementedError
+
+    def select_action(self, state):
         raise NotImplementedError
 
     def evaluate(self, net_env):
@@ -131,10 +136,8 @@ def calculate_rebuffer(future_chunk_length, buffer_size, bit_rate, last_index,
         # calculate total rebuffer time for this combination (start with
         # start_buffer and subtract each download time and add 2 seconds in
         # that order)
-        curr_rebuffer_time = 0
         curr_buffer = start_buffer
-        bitrate_sum = 0
-        smoothness_diffs = 0
+        reward = 0
         last_quality = int(bit_rate)
         for position in range(0, len(combo)):
             chunk_quality = combo[position]
@@ -145,22 +148,17 @@ def calculate_rebuffer(future_chunk_length, buffer_size, bit_rate, last_index,
                 video_size[chunk_quality, index % TOTAL_VIDEO_CHUNK] / \
                 B_IN_MB / future_bandwidth
             if (curr_buffer < download_time):
-                curr_rebuffer_time += (download_time - curr_buffer)
+                rebuffer_time += (download_time - curr_buffer)
                 curr_buffer = 0
             else:
                 curr_buffer -= download_time
-            curr_buffer += 4
-            bitrate_sum += VIDEO_BIT_RATE[chunk_quality]
-            smoothness_diffs += SMOOTH_PENALTY * abs(
-                VIDEO_BIT_RATE[chunk_quality] - VIDEO_BIT_RATE[last_quality])
+                rebuffer_time = 0
+            curr_buffer += VIDEO_CHUNK_LEN / MILLISECONDS_IN_SECOND
+            reward += linear_reward(chunk_quality, last_quality, rebuffer_time)
             last_quality = chunk_quality
         # compute reward for this combination (one reward per 5-chunk combo)
         # bitrates are in Mbits/s, rebuffer in seconds, and smoothness_diffs in
         # Mbits/s
-
-        reward = (bitrate_sum / M_IN_K) - \
-            (REBUF_PENALTY * curr_rebuffer_time) - \
-            (smoothness_diffs / M_IN_K)
 
         if reward >= max_reward:
             # if (best_combo != ()) and best_combo[0] < combo[0]:
