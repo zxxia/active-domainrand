@@ -4,12 +4,13 @@ import numpy as np
 import torch
 
 # from common.agents.ddpg.replay_buffer import ReplayBuffer
-from common.discriminator.discriminator_rewarder import DiscriminatorRewarder
+from pensieve.discriminator_rewarder import DiscriminatorRewarder
 # from common.envs.randomized_vecenv import make_vec_envs
 from common.svpg.svpg import SVPG
 from pensieve.utils import evaluate_policy  # check_solved,
 
-from pensieve.env import Environment
+from pensieve.environment import Environment, MultiEnv
+from pensieve.constants import S_LEN, A_DIM
 
 # device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
 logger = logging.getLogger(__name__)
@@ -23,9 +24,8 @@ class SVPGSimulatorAgent(object):
     in those environments.
     """
 
-    def __init__(self,
-                 video_size_file_dir,
-                 reference_env_id,
+    def __init__(self, video_size_file_dir,
+                 reference_agent_policy,
                  randomized_env_id,
                  randomized_eval_env_id,
                  agent_name,
@@ -48,11 +48,17 @@ class SVPGSimulatorAgent(object):
                  particle_path="",
                  discriminator_batchsz=320,
                  randomized_eval_episodes=3):
+        """
+
+        Args
+            video_size_file_dir(str): path to all video size files.
+            reference_agent_policy: a reference ABR algorithm.
+        """
 
         # TODO: Weird bug
         assert nagents > 2
+        self.reference_agent_policy = reference_agent_policy
 
-        self.reference_env_id = reference_env_id
         self.randomized_env_id = randomized_env_id
         self.randomized_eval_env_id = randomized_eval_env_id
         self.agent_name = agent_name
@@ -63,23 +69,17 @@ class SVPGSimulatorAgent(object):
         self.randomized_eval_episodes = randomized_eval_episodes
 
         # Vectorized environments - step with nagents in parallel
-        # TODO: need to support multiple agent
-        self.reference_env = [Environment(
-            video_size_file_dir, self.reference_env_id, seed,
-            trace_video_same_duration_flag=True) for _ in range(nagents)]
-        # make_vec_envs(reference_env_id, seed, nagents)
-        self.randomized_env = [Environment(
+        self.randomized_env = MultiEnv([Environment(
             video_size_file_dir, self.randomized_env_id, seed,
-            trace_video_same_duration_flag=True) for _ in range(nagents)]
-        # make_vec_envs(randomized_env_id, seed, nagents)
+            trace_video_same_duration_flag=True) for _ in range(nagents)])
 
-        # TODO: fix the observation/state shape and action shape
-        # self.state_dim = self.reference_env.observation_space.shape[0]
-        # self.action_dim = self.reference_env.action_space.shape[0]
+        # fix the observation/state shape and action shape
+        self.state_dim = S_LEN
+        self.action_dim = A_DIM
 
-        self.hard_env = [Environment(
+        self.hard_env = MultiEnv([Environment(
             video_size_file_dir, self.randomized_env_id, seed,
-            trace_video_same_duration_flag=True) for _ in range(nagents)]
+            trace_video_same_duration_flag=True) for _ in range(nagents)])
 
         self.sampled_regions = [[] for _ in range(nparams)]
 
@@ -90,38 +90,31 @@ class SVPGSimulatorAgent(object):
         assert self.nparams == nparams, "Double check number of parameters: " \
             "Args: {}, Env: {}".format(nparams, self.nparams)
 
-        self.svpg_horizon = svpg_horizon
-        self.initial_svpg_steps = initial_svpg_steps
-        self.max_env_timesteps = max_env_timesteps
-        self.episodes_per_instance = episodes_per_instance
-        self.discrete_svpg = discrete_svpg
-
-        self.freeze_discriminator = freeze_discriminator
+        # variables for agent policy
         self.freeze_agent = freeze_agent
-
-        self.train_svpg = train_svpg
-
         self.agent_eval_frequency = max_env_timesteps * nagents
-
-        self.seed = seed
-        self.svpg_timesteps = 0
         self.agent_timesteps = 0
         self.agent_timesteps_since_eval = 0
+        self.seed = seed
 
+        # variables for discriminator
+        self.freeze_discriminator = freeze_discriminator
         self.discriminator_rewarder = DiscriminatorRewarder(
-            reference_env=self.reference_env,
-            randomized_env_id=randomized_env_id,
+            state_dim=self.state_dim,
+            action_dim=self.action_dim,
             discriminator_batchsz=discriminator_batchsz,
             reward_scale=reward_scale,
             load_discriminator=load_discriminator,
         )
 
-        # do not need replay buffer in A3C
-        # if not self.freeze_agent:
-        #     self.replay_buffer = ReplayBuffer()
-        # else:
-        #     self.replay_buffer = None
-
+        # variables for SVPG
+        self.svpg_horizon = svpg_horizon
+        self.initial_svpg_steps = initial_svpg_steps
+        self.max_env_timesteps = max_env_timesteps
+        self.episodes_per_instance = episodes_per_instance
+        self.discrete_svpg = discrete_svpg
+        self.train_svpg = train_svpg
+        self.svpg_timesteps = 0
         self.svpg = SVPG(nagents=nagents,
                          nparams=self.nparams,
                          max_step_length=max_step_length,
@@ -135,10 +128,6 @@ class SVPGSimulatorAgent(object):
             logger.info("Loading particles from: {}".format(particle_path))
             self.svpg.load(directory=particle_path)
 
-        self.simulation_instances_full_horizon = np.ones(
-            (self.nagents, self.svpg_horizon, self.svpg.svpg_rollout_length,
-             self.svpg.nparams)) * -1
-
     def select_action(self, agent_policy):
         """Select an action based on SVPG policy.
 
@@ -149,10 +138,6 @@ class SVPGSimulatorAgent(object):
         if self.svpg_timesteps >= self.initial_svpg_steps:
             # Get sim instances from SVPG policy
             simulation_instances = self.svpg.step()
-
-            index = self.svpg_timesteps % self.svpg_horizon
-            self.simulation_instances_full_horizon[:, index, :, :] = \
-                simulation_instances
 
         else:
             # Creates completely randomized environment
@@ -188,15 +173,8 @@ class SVPGSimulatorAgent(object):
 
             reference_trajectory = self.rollout_agent(agent_policy)
 
-            # try:
-            #     self.randomized_env.randomize(
-            #         randomized_values=simulation_instances[t])
-            # except:
-            #     import ipdb
-            #     ipdb.set_trace()
-            for net_env, simulation_instance in zip(self.randomized_env,
-                                                    simulation_instances[t]):
-                net_env.randomize(simulation_instance)
+            self.randomized_env.randomize(
+                randomized_values=simulation_instances[t])
 
             randomized_trajectory = self.rollout_agent(
                 agent_policy, reference=False)
@@ -367,27 +345,27 @@ class SVPGSimulatorAgent(object):
         self.svpg_timesteps += 1
         return solved_reference, info
 
-    def rollout_agent(self, agent_policy, reference=True, eval_episodes=None):
-        """Roll out agent_policy in the specified environment."""
-        if reference:
-            if eval_episodes is None:
-                eval_episodes = self.episodes_per_instance
-            trajectory = evaluate_policy(
-                nagents=self.nagents, net_envs=self.reference_env,
-                agent_policy=agent_policy,  # replay_buffer=None,
-                eval_episodes=eval_episodes, max_steps=self.max_env_timesteps,
-                freeze_agent=True, add_noise=False,
-                log_distances=self.log_distances)
-        else:
-            trajectory = evaluate_policy(
-                nagents=self.nagents, net_envs=self.randomized_env,
-                agent_policy=agent_policy,  # replay_buffer=self.replay_buffer,
-                eval_episodes=self.episodes_per_instance,
-                max_steps=self.max_env_timesteps,
-                freeze_agent=self.freeze_agent, add_noise=True,
-                log_distances=self.log_distances)
-
-        return trajectory
+    # def rollout_agent(self, agent_policy, reference=True, eval_episodes=None):
+    #     """Roll out agent_policy in the specified environment."""
+    #     if reference:
+    #         if eval_episodes is None:
+    #             eval_episodes = self.episodes_per_instance
+    #         trajectory = evaluate_policy(
+    #             nagents=self.nagents, net_envs=self.reference_env,
+    #             agent_policy=agent_policy,  # replay_buffer=None,
+    #             eval_episodes=eval_episodes, max_steps=self.max_env_timesteps,
+    #             freeze_agent=True, add_noise=False,
+    #             log_distances=self.log_distances)
+    #     else:
+    #         trajectory = evaluate_policy(
+    #             nagents=self.nagents, net_envs=self.randomized_env,
+    #             agent_policy=agent_policy,  # replay_buffer=self.replay_buffer,
+    #             eval_episodes=self.episodes_per_instance,
+    #             max_steps=self.max_env_timesteps,
+    #             freeze_agent=self.freeze_agent, add_noise=True,
+    #             log_distances=self.log_distances)
+    #
+    #     return trajectory
 
     def sample_trajectories(self, batch_size):
         indices = np.random.randint(

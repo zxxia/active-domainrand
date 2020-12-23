@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Categorical
 
-from pensieve.network import ActorNetwork, CriticNetwork
+from pensieve.a3c import ActorNetwork, CriticNetwork
 
 RAND_RANGE = 1000
 
