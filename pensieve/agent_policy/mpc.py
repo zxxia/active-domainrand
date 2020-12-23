@@ -5,7 +5,7 @@ import numpy as np
 from numba import jit
 
 from pensieve.agent_policy import BaseAgentPolicy
-from pensieve.constants import (B_IN_MB, DEFAULT_QUALITY,
+from pensieve.constants import (B_IN_MB, DEFAULT_QUALITY, M_IN_K,
                                 MILLISECONDS_IN_SECOND, VIDEO_BIT_RATE,
                                 VIDEO_CHUNK_LEN)
 from pensieve.utils import linear_reward
@@ -14,7 +14,7 @@ from pensieve.utils import linear_reward
 class RobustMPC(BaseAgentPolicy):
     """Naive implementation of RobustMPC."""
 
-    def __init__(self, mpc_future_chunk_cnt=5):
+    def __init__(self, mpc_future_chunk_cnt=5, accumulate_past_error=False):
         self.mpc_future_chunk_cnt = mpc_future_chunk_cnt
 
         # all possible combinations of 5 chunk bitrates (9^5 options)
@@ -27,6 +27,7 @@ class RobustMPC(BaseAgentPolicy):
 
         self.past_errors = []
         self.past_bandwidth_ests = []
+        self.accumulate_past_error = accumulate_past_error
 
     def select_action(self, state, last_index, future_chunk_cnt, video_size,
                       bit_rate, buffer_size):
@@ -34,13 +35,13 @@ class RobustMPC(BaseAgentPolicy):
         # since we have never predicted bandwidth
         if (len(self.past_bandwidth_ests) > 0):
             self.past_errors.append(np.abs(
-                self.past_bandwidth_ests[-1]-state[0, 3, -1])/state[0, 3, -1])
+                self.past_bandwidth_ests[-1]-state[0, 2, -1])/state[0, 2, -1])
         else:
             self.past_errors.append(0)
 
         # pick bitrate according to MPC
         # first get harmonic mean of last 5 bandwidths
-        past_bandwidths = state[0, 3, -5:]
+        past_bandwidths = state[0, 2, -5:]
         while past_bandwidths[0] == 0.0:
             past_bandwidths = past_bandwidths[1:]
 
@@ -53,24 +54,28 @@ class RobustMPC(BaseAgentPolicy):
         if (len(self.past_errors) < 5):
             error_pos = -len(self.past_errors)
         max_error = max(self.past_errors[error_pos:])
-        future_bandwidth = harmonic_bandwidth / (1+max_error)  # robustMPC
+        future_bandwidth = harmonic_bandwidth / (1 + max_error)  # robustMPC
         self.past_bandwidth_ests.append(harmonic_bandwidth)
 
         bit_rate = predict_birate(
             future_chunk_cnt, buffer_size, bit_rate, last_index,
             future_bandwidth, video_size, self.chunk_combo_options,
             self.bitrate_options)
-        return bit_rate
+        return bit_rate, future_bandwidth
 
     def evaluate(self, net_env):
         """Evaluate on a single net_env."""
+        results = []
+        if not self.accumulate_past_error:
+            self.past_bandwidth_ests = []
+            self.past_errors = []
+
         net_env.reset()
-        # past errors in bandwidth
         video_size = np.array([net_env.video_size[i]
                                for i in sorted(net_env.video_size)])
         time_stamp = 0
-
         bit_rate = DEFAULT_QUALITY
+        future_bandwidth = 0
 
         while True:  # serve video forever
             # the action is from the last decision
@@ -80,18 +85,25 @@ class RobustMPC(BaseAgentPolicy):
             time_stamp += info['delay']  # in ms
             time_stamp += info['sleep_time']  # in ms
 
+            results.append([time_stamp / M_IN_K,
+                            self.bitrate_options[bit_rate],
+                            info['buffer_size'], info['rebuf'],
+                            info['video_chunk_size'], info['delay'], reward,
+                            future_bandwidth])
+
             # future chunks length (try 4 if that many remaining)
             last_index = (net_env.total_video_chunk -
                           info['video_chunk_remain'] - 1)
             future_chunk_cnt = min(self.mpc_future_chunk_cnt,
                                    net_env.total_video_chunk - last_index - 1)
-            # TODO: refactor this into select action
-            bit_rate = self.select_action(state, last_index, future_chunk_cnt,
-                                          video_size, bit_rate,
-                                          info['buffer_size'])
+
+            bit_rate, future_bandwidth = self.select_action(
+                state, last_index, future_chunk_cnt, video_size, bit_rate,
+                info['buffer_size'])
 
             if end_of_video:
                 break
+        return results
 
     def test_envs(self, net_envs):
         """Evaluate MultiEnv."""
@@ -109,7 +121,7 @@ class RobustMPC(BaseAgentPolicy):
 def predict_birate(future_chunk_length, buffer_size, bit_rate, last_index,
                    future_bandwidth, video_size, chunk_combo_options,
                    bitrate_options):
-    max_reward = -100000000
+    max_reward = np.NINF
     best_combo = ()
     start_buffer = buffer_size
 
