@@ -138,7 +138,7 @@ def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
          'rewards_median', 'rewards_95per', 'rewards_max'])
 
     t_start = time.time()
-    for epoch in range(iters):
+    for epoch in range(int(iters)):
         # synchronize the network parameters of work agent
         actor_net_params = net.get_actor_param()
         # critic_net_params=net.getCriticParam()
@@ -165,6 +165,7 @@ def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
         # actor_gradient_batch = []
         # critic_gradient_batch = []
 
+        t_get_network_gradient_start = time.time()
         for i in range(num_agents):
             # print('central_agent: {}/{}'.format(epoch, iters))
             s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
@@ -175,9 +176,12 @@ def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
             total_batch_len += len(r_batch)
             total_agents += 1.0
             total_entropy += np.sum(info['entropy'])
+        print('get_network_gradient: {}'.format(time.time() - t_get_network_gradient_start))
 
         # log training information
+        t_update_network_gradient = time.time()
         net.update_network()
+        print('update_network: {}'.format(time.time() - t_update_network_gradient))
 
         avg_reward = total_reward / total_agents
         avg_entropy = total_entropy / total_batch_len
@@ -187,14 +191,24 @@ def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
 
         if (epoch_trained+epoch+1) % model_save_interval == 0:
             # Save the neural net parameters to disk.
-            print("\nTrain epoch: {}/{}, time use: {}s".format(
+            print("Train epoch: {}/{}, time use: {}s".format(
                 epoch + 1, iters, time.time() - t_start))
             t_start = time.time()
             net.save_critic_model(os.path.join(
                 summary_dir, "critic_ep_{}".format(epoch_trained+epoch+1)))
             net.save_actor_model(os.path.join(
                 summary_dir, "actor_ep_{}".format(epoch_trained+epoch+1)))
-            val_results = evaluate_envs(net, val_envs)
+            if val_envs is not None:
+                val_results = evaluate_envs(net, val_envs)
+                vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
+                               for vid_results in val_results]
+                val_log_writer.writerow([epoch_trained + epoch + 1,
+                                         np.min(vid_rewards),
+                                         np.percentile(vid_rewards, 5),
+                                         np.mean(vid_rewards),
+                                         np.median(vid_rewards),
+                                         np.percentile(vid_rewards, 95),
+                                         np.max(vid_rewards)])
             # TODO: process val results and write into log
             # evaluate_envs(net, train_envs)
             # evaluate_envs(net, test_envs)
@@ -250,65 +264,74 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                              'reward',
                              'epoch', 'trace_idx', 'mahimahi_ptr'])
 
-        net = A3C(False, [S_INFO, S_LEN], A_DIM, ACTOR_LR_RATE, CRITIC_LR_RATE)
-
         # initial synchronization of the network parameters from the
         # coordinator
+        net = A3C(False, [S_INFO, S_LEN], A_DIM, ACTOR_LR_RATE, CRITIC_LR_RATE)
+        actor_net_params = net_params_queue.get()
+        if actor_net_params == "exit":
+            return
+        net.hard_update_actor_network(actor_net_params)
 
         time_stamp = 0
         epoch = 0
+        env_idx = prng.randint(len(net_envs))
+        net_env = net_envs[env_idx]
+        bit_rate = DEFAULT_QUALITY
+        s_batch = []
+        a_batch = []
+        r_batch = []
+        entropy_record = []
+        is_1st_step = True
         while True:
-            actor_net_params = net_params_queue.get()
-            if actor_net_params == "exit":
-                break
-            net.hard_update_actor_network(actor_net_params)
-            bit_rate = DEFAULT_QUALITY
-            s_batch = []
-            a_batch = []
-            r_batch = []
-            entropy_record = []
-            # state = torch.zeros((1, S_INFO, S_LEN))
-
-            env_idx = prng.randint(len(net_envs))
-            net_env = net_envs[env_idx]
-            # print('agent_{}: iter{}/{}, env_idx={}'.format(
-            #     agent_id, epoch, iters, env_idx))
+            # print('agent_{}: iter{} env_idx={}'.format(
+            #     agent_id, epoch, env_idx))
 
             # the action is from the last decision
             # this is to make the framework similar to the real
             state, reward, end_of_video, info = net_env.step(bit_rate)
             state = torch.from_numpy(state).type('torch.FloatTensor')
 
+            # while not end_of_video:  # and len(s_batch) < batch_size:
+            bit_rate, action_prob_vec = net.select_action(state)
+            # Note: we need to discretize the probability into 1/RAND_RANGE
+            # steps, because there is an intrinsic discrepancy in passing
+            # single state and batch states
+
             time_stamp += info['delay']  # in ms
             time_stamp += info['sleep_time']  # in ms
-
-            while not end_of_video and len(s_batch) < batch_size:
-                bit_rate, action_prob_vec = net.select_action(state)
-                # Note: we need to discretize the probability into 1/RAND_RANGE
-                # steps, because there is an intrinsic discrepancy in passing
-                # single state and batch states
-
-                state, reward, end_of_video, info = net_env.step(bit_rate)
-                state = torch.from_numpy(state).type('torch.FloatTensor')
-
+            if not is_1st_step:
                 s_batch.append(state)
                 a_batch.append(bit_rate)
                 r_batch.append(reward)
                 entropy_record.append(compute_entropy(action_prob_vec))
+            else:
+                is_1st_step = False
 
-                # log time_stamp, bit_rate, buffer_size, reward
-                csv_writer.writerow([time_stamp, VIDEO_BIT_RATE[bit_rate],
-                                     info['buffer_size'], info['rebuf'],
-                                     info['video_chunk_size'], info['delay'],
-                                     reward, epoch, env_idx])
-            # print('agent_{} put {}'.format(agent_id, len(s_batch)))
-            exp_queue.put([s_batch,  # ignore the first chuck
-                           a_batch,  # since we don't have the
-                           r_batch,  # control over it
-                           end_of_video,
-                           {'entropy': entropy_record}])
+            # log time_stamp, bit_rate, buffer_size, reward
+            csv_writer.writerow([time_stamp, VIDEO_BIT_RATE[bit_rate],
+                                 info['buffer_size'], info['rebuf'],
+                                 info['video_chunk_size'], info['delay'],
+                                 reward, epoch, env_idx])
+            if len(s_batch) == batch_size:
+                # print('agent_{} epoch {} env {} put {}'.format(agent_id, epoch, env_idx, len(s_batch)))
+                exp_queue.put([s_batch,  # ignore the first chuck
+                               a_batch,  # since we don't have the
+                               r_batch,  # control over it
+                               end_of_video,
+                               {'entropy': entropy_record}])
+                actor_net_params = net_params_queue.get()
+                if actor_net_params == "exit":
+                    break
+                net.hard_update_actor_network(actor_net_params)
+                s_batch = []
+                a_batch = []
+                r_batch = []
+                entropy_record = []
+                epoch += 1
             if end_of_video:
                 net_env.reset()
-
-            log_file.write('\n')  # so that in the log we know where video ends
-            epoch += 1
+                env_idx = prng.randint(len(net_envs))
+                net_env = net_envs[env_idx]
+                bit_rate = DEFAULT_QUALITY
+                is_1st_step = True
+                log_file.write('\n')  # mark video ends in log
