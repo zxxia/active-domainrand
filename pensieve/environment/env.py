@@ -40,6 +40,7 @@ class Environment:
         # variables related to video player and network configuration
         self.config_file = config_file
         self.seed = seed
+        self.prng = np.random.RandomState(seed)
 
         self.dimensions = {}
         self._construct_dimensions()
@@ -205,7 +206,7 @@ class Environment:
 
         # add a multiplicative noise to the delay
         if not self.fixed:
-            delay *= np.random.uniform(NOISE_LOW, NOISE_HIGH)
+            delay *= self.prng.uniform(NOISE_LOW, NOISE_HIGH)
 
         # rebuffer time
         rebuf = np.maximum(delay - self.buffer_size, 0.0)

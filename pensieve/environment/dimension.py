@@ -14,12 +14,12 @@ class Dimension(object):
         self.unit = unit
 
         # TODO: doesn't this change the random seed for all numpy uses?
-        np.random.seed(seed)
+        self.prng = np.random.RandomState(seed)
 
     def randomize(self):
         """Uniformly randomize Dimension's value."""
-        self.current_value = np.random.uniform(low=self.min_value,
-                                               high=self.max_value)
+        self.current_value = self.uniform(low=self.min_value,
+                                          high=self.max_value)
 
     def reset(self):
         """Reset Dimension's value to default."""
