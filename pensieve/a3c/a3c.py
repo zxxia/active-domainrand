@@ -124,13 +124,11 @@ class A3C(object):
             self.critic_network.load_state_dict(torch.load(critic_model_path))
 
     def save_actor_model(self, model_save_path):
-        torch.save(self.actor_network.state_dict(),
-                   os.path.join(model_save_path, "pensieve_actor.pth"))
+        torch.save(self.actor_network.state_dict(), model_save_path)
 
     def save_critic_model(self, model_save_path):
         if self.is_central:
-            torch.save(self.critic_network.state_dict(),
-                       os.path.join(model_save_path, "pensieve_critic.pth"))
+            torch.save(self.critic_network.state_dict(), model_save_path)
 
 
 def compute_entropy(x):
