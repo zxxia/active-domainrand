@@ -12,7 +12,8 @@ RAND_RANGE = 1000
 
 def entropy_weight_decay_func(epoch):
     # linear decay
-    return np.maximum((1-0.1)/(10**5) * epoch + 1, 0.1)
+    # return np.maximum((1-0.1)/(10**5) * epoch + 1, 0.1)
+    return np.maximum(-0.05/(10**4) * epoch + 0.5, 0.1)
 
 
 class A3C(object):
@@ -99,7 +100,11 @@ class A3C(object):
     def hard_update_actor_network(self, actor_net_params):
         for target_param, source_param in zip(self.actor_network.parameters(),
                                               actor_net_params):
-            target_param.data.copy_(source_param.data)
+            if isinstance(source_param, np.ndarray):
+                target_param.data.copy_(
+                    torch.from_numpy(source_param).to(self.device))
+            elif torch.is_tensor(source_param):
+                target_param.data.copy_(source_param.data)
 
     def update_network(self):
         # use the feature of accumulating gradient in pytorch

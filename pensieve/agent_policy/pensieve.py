@@ -30,14 +30,14 @@ class Pensieve(BaseAgentPolicy):
             batch_size(int): training batch size.
         """
         # https://github.com/pytorch/pytorch/issues/3966
-        mp.set_start_method("spawn")
+        # mp.set_start_method("spawn")
         self.num_agents = num_agents
 
         self.net = A3C(True, [S_INFO, S_LEN], A_DIM,
                        ACTOR_LR_RATE, CRITIC_LR_RATE)
         # NOTE: this is required for the ``fork`` method to work
-        self.net.actor_network.share_memory()
-        self.net.critic_network.share_memory()
+        # self.net.actor_network.share_memory()
+        # self.net.critic_network.share_memory()
 
         self.load_models(actor_path, critic_path)
 
@@ -61,12 +61,6 @@ class Pensieve(BaseAgentPolicy):
         # (note: threading is not desirable due to python GIL)
         assert len(net_params_queues) == self.num_agents
         assert len(exp_queues) == self.num_agents
-        coordinator = mp.Process(target=central_agent,
-                                 args=(self.num_agents, self.net,
-                                       net_params_queues, exp_queues, iters,
-                                       self.log_dir, self.model_save_interval,
-                                       val_envs, self.epoch))
-        coordinator.start()
 
         agents = []
         for i in range(self.num_agents):
@@ -77,22 +71,45 @@ class Pensieve(BaseAgentPolicy):
         for i in range(self.num_agents):
             agents[i].start()
 
+        self.central_agent(net_params_queues, exp_queues, iters, val_envs,
+                           test_envs)
+
         # wait unit training is done
-        coordinator.join()
         for i in range(self.num_agents):
             agents[i].join()
 
         self.epoch += iters
 
     def evaluate(self, net_env):
-        return evaluate_env(self.net, net_env)
+        net_env.reset()
+        results = []
+        time_stamp = 0
+        bit_rate = DEFAULT_QUALITY
+        while True:  # serve video forever
+            # the action is from the last decision
+            # this is to make the framework similar to the real
+            state, reward, end_of_video, info = net_env.step(bit_rate)
 
-    def test(self, net_envs):
-        for net_env in net_envs:
-            self.evaluate(net_env)
+            time_stamp += info['delay']  # in ms
+            time_stamp += info['sleep_time']  # in ms
 
-            raise NotImplementedError
+            results.append([time_stamp / M_IN_K, VIDEO_BIT_RATE[bit_rate],
+                            info['buffer_size'], info['rebuf'],
+                            info['video_chunk_size'], info['delay'], reward])
+
+            state = torch.from_numpy(state).type('torch.FloatTensor')
+            bit_rate, action_prob_vec = self.net.select_action(state)
+            bit_rate = np.argmax(action_prob_vec)
+            if end_of_video:
+                break
+        return results
+
+    def evaluate_envs(self, net_envs):
         # TODO: return trajectories consider multiprocessing
+        results = []
+        for net_env in net_envs:
+            results.append(self.evaluate(net_env))
+        return results
 
     def select_action(self, state):
         raise NotImplementedError
@@ -109,144 +126,123 @@ class Pensieve(BaseAgentPolicy):
         if critic_model_path is not None:
             self.net.load_critic_model(critic_model_path)
 
+    def central_agent(self, net_params_queues, exp_queues, iters, val_envs,
+                      test_envs):
+        torch.set_num_threads(2)
 
-def central_agent(num_agents, net, net_params_queues, exp_queues, iters,
-                  summary_dir, model_save_interval, val_envs, epoch_trained):
-    torch.set_num_threads(1)
+        logging.basicConfig(filename=os.path.join(self.log_dir, 'log_central'),
+                            filemode='w', level=logging.INFO)
 
-    logging.basicConfig(filename=os.path.join(summary_dir, 'log_central'),
-                        filemode='w', level=logging.INFO)
+        assert self.net.is_central
+        test_log_writer = csv.writer(
+            open(os.path.join(self.log_dir, 'log_test'), 'w', 1),
+            delimiter='\t')
+        test_log_writer.writerow(
+            ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
+             'rewards_median', 'rewards_95per', 'rewards_max'])
 
-    assert net.is_central
-    test_log_writer = csv.writer(
-        open(os.path.join(summary_dir, 'log_test'), 'w', 1), delimiter='\t')
-    test_log_writer.writerow(
-        ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
-         'rewards_median', 'rewards_95per', 'rewards_max'])
+        train_e2e_log_writer = csv.writer(
+            open(os.path.join(self.log_dir, 'log_train_e2e'), 'w', 1),
+            delimiter='\t')
+        train_e2e_log_writer.writerow(
+            ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
+             'rewards_median', 'rewards_95per', 'rewards_max'])
 
-    train_e2e_log_writer = csv.writer(
-        open(os.path.join(summary_dir, 'log_train_e2e'), 'w', 1),
-        delimiter='\t')
-    train_e2e_log_writer.writerow(
-        ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
-         'rewards_median', 'rewards_95per', 'rewards_max'])
+        val_log_writer = csv.writer(
+            open(os.path.join(self.log_dir, 'log_val'), 'w', 1),
+            delimiter='\t')
+        val_log_writer.writerow(
+            ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
+             'rewards_median', 'rewards_95per', 'rewards_max'])
 
-    val_log_writer = csv.writer(
-        open(os.path.join(summary_dir, 'log_val'), 'w', 1), delimiter='\t')
-    val_log_writer.writerow(
-        ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
-         'rewards_median', 'rewards_95per', 'rewards_max'])
+        t_start = time.time()
+        for epoch in range(int(iters)):
+            # synchronize the network parameters of work agent
+            actor_net_params = self.net.get_actor_param()
+            actor_net_params = [params.detach().cpu().numpy()
+                                for params in actor_net_params]
 
-    t_start = time.time()
-    for epoch in range(int(iters)):
-        # synchronize the network parameters of work agent
-        actor_net_params = net.get_actor_param()
-        # critic_net_params=net.getCriticParam()
-        for i in range(num_agents):
-            # net_params_queues[i].put([actor_net_params,critic_net_params])
-            net_params_queues[i].put(actor_net_params)
-            # Note: this is synchronous version of the parallel training,
-            # which is easier to understand and probe. The framework can be
-            # fairly easily modified to support asynchronous training.
-            # Some practices of asynchronous training (lock-free SGD at
-            # its core) are nicely explained in the following two papers:
-            # https://arxiv.org/abs/1602.01783
-            # https://arxiv.org/abs/1106.5730
+            # critic_net_params=net.getCriticParam()
+            for i in range(self.num_agents):
+                # net_params_queues[i].put([actor_net_params,critic_net_params])
+                net_params_queues[i].put(actor_net_params)
+                # Note: this is synchronous version of the parallel training,
+                # which is easier to understand and probe. The framework can be
+                # fairly easily modified to support asynchronous training.
+                # Some practices of asynchronous training (lock-free SGD at
+                # its core) are nicely explained in the following two papers:
+                # https://arxiv.org/abs/1602.01783
+                # https://arxiv.org/abs/1106.5730
 
-        # record average reward and td loss change
-        # in the experiences from the agents
-        total_batch_len = 0.0
-        total_reward = 0.0
-        # total_td_loss = 0.0
-        total_entropy = 0.0
-        total_agents = 0.0
+            # record average reward and td loss change
+            # in the experiences from the agents
+            total_batch_len = 0.0
+            total_reward = 0.0
+            # total_td_loss = 0.0
+            total_entropy = 0.0
+            total_agents = 0.0
 
-        # assemble experiences from the agents
-        # actor_gradient_batch = []
-        # critic_gradient_batch = []
+            # assemble experiences from the agents
+            # actor_gradient_batch = []
+            # critic_gradient_batch = []
+            for i in range(self.num_agents):
+                s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
+                s_batch = [torch.from_numpy(s).type('torch.FloatTensor')
+                           for s in s_batch]
+                self.net.get_network_gradient(
+                    s_batch, a_batch, r_batch, terminal=terminal, epoch=epoch)
+                total_reward += np.sum(r_batch)
+                total_batch_len += len(r_batch)
+                total_agents += 1.0
+                total_entropy += np.sum(info['entropy'])
+            print('central_agent: {}/{}'.format(epoch, iters))
 
-        t_get_network_gradient_start = time.time()
-        for i in range(num_agents):
-            # print('central_agent: {}/{}'.format(epoch, iters))
-            s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
-            net.get_network_gradient(
-                s_batch, a_batch, r_batch, terminal=terminal, epoch=epoch)
+            # log training information
+            self.net.update_network()
 
-            total_reward += np.sum(r_batch)
-            total_batch_len += len(r_batch)
-            total_agents += 1.0
-            total_entropy += np.sum(info['entropy'])
-        print('get_network_gradient: {}'.format(time.time() - t_get_network_gradient_start))
+            avg_reward = total_reward / total_agents
+            avg_entropy = total_entropy / total_batch_len
 
-        # log training information
-        t_update_network_gradient = time.time()
-        net.update_network()
-        print('update_network: {}'.format(time.time() - t_update_network_gradient))
+            logging.info('Epoch: {} Avg_reward: {} Avg_entropy: {}'.format(
+                epoch, avg_reward, avg_entropy))
 
-        avg_reward = total_reward / total_agents
-        avg_entropy = total_entropy / total_batch_len
+            if (self.epoch+epoch+1) % self.model_save_interval == 0:
+                # Save the neural net parameters to disk.
+                print("Train epoch: {}/{}, time use: {}s".format(
+                    epoch + 1, iters, time.time() - t_start))
+                self.net.save_critic_model(os.path.join(
+                    self.log_dir, "critic_ep_{}.pth".format(self.epoch+epoch+1)))
+                self.net.save_actor_model(os.path.join(
+                    self.log_dir, "actor_ep_{}.pth".format(self.epoch+epoch+1)))
+                if val_envs is not None:
+                    val_results = self.evaluate_envs(val_envs)
+                    vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
+                                   for vid_results in val_results]
+                    val_log_writer.writerow([self.epoch + epoch + 1,
+                                             np.min(vid_rewards),
+                                             np.percentile(vid_rewards, 5),
+                                             np.mean(vid_rewards),
+                                             np.median(vid_rewards),
+                                             np.percentile(vid_rewards, 95),
+                                             np.max(vid_rewards)])
+                if test_envs is not None:
+                    test_results = self.evaluate_envs(test_envs)
+                    vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
+                                   for vid_results in test_results]
+                    test_log_writer.writerow([self.epoch + epoch + 1,
+                                              np.min(vid_rewards),
+                                              np.percentile(vid_rewards, 5),
+                                              np.mean(vid_rewards),
+                                              np.median(vid_rewards),
+                                              np.percentile(vid_rewards, 95),
+                                              np.max(vid_rewards)])
+                t_start = time.time()
+                # TODO: process val results and write into log
+                # evaluate_envs(net, train_envs)
 
-        logging.info('Epoch: {} Avg_reward: {} Avg_entropy: {}'.format(
-            epoch, avg_reward, avg_entropy))
-
-        if (epoch_trained+epoch+1) % model_save_interval == 0:
-            # Save the neural net parameters to disk.
-            print("Train epoch: {}/{}, time use: {}s".format(
-                epoch + 1, iters, time.time() - t_start))
-            t_start = time.time()
-            net.save_critic_model(os.path.join(
-                summary_dir, "critic_ep_{}".format(epoch_trained+epoch+1)))
-            net.save_actor_model(os.path.join(
-                summary_dir, "actor_ep_{}".format(epoch_trained+epoch+1)))
-            if val_envs is not None:
-                val_results = evaluate_envs(net, val_envs)
-                vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
-                               for vid_results in val_results]
-                val_log_writer.writerow([epoch_trained + epoch + 1,
-                                         np.min(vid_rewards),
-                                         np.percentile(vid_rewards, 5),
-                                         np.mean(vid_rewards),
-                                         np.median(vid_rewards),
-                                         np.percentile(vid_rewards, 95),
-                                         np.max(vid_rewards)])
-            # TODO: process val results and write into log
-            # evaluate_envs(net, train_envs)
-            # evaluate_envs(net, test_envs)
-
-    # signal all agents to exit, otherwise they block forever.
-    for i in range(num_agents):
-        net_params_queues[i].put("exit")
-
-
-def evaluate_env(net, net_env):
-    net_env.reset()
-    results = []
-    time_stamp = 0
-    bit_rate = DEFAULT_QUALITY
-    while True:  # serve video forever
-        # the action is from the last decision
-        # this is to make the framework similar to the real
-        state, reward, end_of_video, info = net_env.step(bit_rate)
-
-        time_stamp += info['delay']  # in ms
-        time_stamp += info['sleep_time']  # in ms
-
-        results.append([time_stamp / M_IN_K, VIDEO_BIT_RATE[bit_rate],
-                        info['buffer_size'], info['rebuf'],
-                        info['video_chunk_size'], info['delay'], reward])
-
-        state = torch.from_numpy(state).type('torch.FloatTensor')
-        bit_rate, action_prob_vec = net.select_action(state)
-        if end_of_video:
-            break
-    return results
-
-
-def evaluate_envs(net, net_envs):
-    results = []
-    for net_env in net_envs:
-        results.append(evaluate_env(net, net_env))
-    return results
+        # signal all agents to exit, otherwise they block forever.
+        for i in range(self.num_agents):
+            net_params_queues[i].put("exit")
 
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
@@ -257,7 +253,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
 
     with open(os.path.join(summary_dir,
                            'log_agent_'+str(agent_id)), 'w', 1) as log_file:
-        csv_writer = csv.writer(log_file, delimiter='\t')
+        csv_writer = csv.writer(log_file, delimiter='\t', lineterminator="\n")
 
         csv_writer.writerow(['time_stamp', 'bit_rate', 'buffer_size',
                              'rebuffer', 'video_chunk_size', 'delay',
@@ -283,16 +279,13 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
         entropy_record = []
         is_1st_step = True
         while True:
-            # print('agent_{}: iter{} env_idx={}'.format(
-            #     agent_id, epoch, env_idx))
 
             # the action is from the last decision
             # this is to make the framework similar to the real
             state, reward, end_of_video, info = net_env.step(bit_rate)
-            state = torch.from_numpy(state).type('torch.FloatTensor')
 
-            # while not end_of_video:  # and len(s_batch) < batch_size:
-            bit_rate, action_prob_vec = net.select_action(state)
+            bit_rate, action_prob_vec = net.select_action(
+                torch.from_numpy(state).type('torch.FloatTensor'))
             # Note: we need to discretize the probability into 1/RAND_RANGE
             # steps, because there is an intrinsic discrepancy in passing
             # single state and batch states
@@ -313,12 +306,12 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                                  info['video_chunk_size'], info['delay'],
                                  reward, epoch, env_idx])
             if len(s_batch) == batch_size:
-                # print('agent_{} epoch {} env {} put {}'.format(agent_id, epoch, env_idx, len(s_batch)))
                 exp_queue.put([s_batch,  # ignore the first chuck
                                a_batch,  # since we don't have the
                                r_batch,  # control over it
                                end_of_video,
                                {'entropy': entropy_record}])
+
                 actor_net_params = net_params_queue.get()
                 if actor_net_params == "exit":
                     break
