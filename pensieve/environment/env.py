@@ -130,14 +130,16 @@ class Environment:
             to the environment parameters. If None, do uniform randomization.
         """
         # TODO: need to implement randomized_values assignment.
-        for name, dimension in self.dimensions.items():
-            if dimension.max_value != dimension.min_value:  # no need to random
+        for name, dim in self.dimensions.items():
+            if dim.max_value != dim.min_value:  # no need to random
                 if randomized_values is not None:
                     # TODO: directly assign the values to a dimension
-                    dimension.current_value = randomized_values[0]
+                    print('assign', randomized_values)
+                    assert dim.min_value <= randomized_values <= dim.max_value
+                    dim.current_value = randomized_values
                 else:
                     # uniform randomization
-                    dimension.randomize()
+                    dim.randomize()
         # TODO: need to consider whether to create a new network trace.
 
     def reset(self, **kwargs):

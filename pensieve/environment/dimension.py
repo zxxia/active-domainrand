@@ -18,8 +18,8 @@ class Dimension(object):
 
     def randomize(self):
         """Uniformly randomize Dimension's value."""
-        self.current_value = self.uniform(low=self.min_value,
-                                          high=self.max_value)
+        self.current_value = self.prng.uniform(low=self.min_value,
+                                               high=self.max_value)
 
     def reset(self):
         """Reset Dimension's value to default."""
