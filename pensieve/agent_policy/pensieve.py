@@ -162,9 +162,7 @@ class Pensieve(BaseAgentPolicy):
             actor_net_params = [params.detach().cpu().numpy()
                                 for params in actor_net_params]
 
-            # critic_net_params=net.getCriticParam()
             for i in range(self.num_agents):
-                # net_params_queues[i].put([actor_net_params,critic_net_params])
                 net_params_queues[i].put(actor_net_params)
                 # Note: this is synchronous version of the parallel training,
                 # which is easier to understand and probe. The framework can be
@@ -187,8 +185,6 @@ class Pensieve(BaseAgentPolicy):
             # critic_gradient_batch = []
             for i in range(self.num_agents):
                 s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
-                s_batch = [torch.from_numpy(s).type('torch.FloatTensor')
-                           for s in s_batch]
                 self.net.get_network_gradient(
                     s_batch, a_batch, r_batch, terminal=terminal, epoch=epoch)
                 total_reward += np.sum(r_batch)
@@ -284,8 +280,8 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
             # this is to make the framework similar to the real
             state, reward, end_of_video, info = net_env.step(bit_rate)
 
-            bit_rate, action_prob_vec = net.select_action(
-                torch.from_numpy(state).type('torch.FloatTensor'))
+            bit_rate, action_prob_vec = net.select_action(state)
+            bit_rate = bit_rate[0]
             # Note: we need to discretize the probability into 1/RAND_RANGE
             # steps, because there is an intrinsic discrepancy in passing
             # single state and batch states
@@ -296,8 +292,9 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 s_batch.append(state)
                 a_batch.append(bit_rate)
                 r_batch.append(reward)
-                entropy_record.append(compute_entropy(action_prob_vec))
+                entropy_record.append(compute_entropy(action_prob_vec)[0])
             else:
+                # ignore the first chunck since we can't control it
                 is_1st_step = False
 
             # log time_stamp, bit_rate, buffer_size, reward
@@ -306,11 +303,9 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                                  info['video_chunk_size'], info['delay'],
                                  reward, epoch, env_idx])
             if len(s_batch) == batch_size:
-                exp_queue.put([s_batch,  # ignore the first chuck
-                               a_batch,  # since we don't have the
-                               r_batch,  # control over it
-                               end_of_video,
-                               {'entropy': entropy_record}])
+                exp_queue.put([np.concatenate(s_batch), np.array(a_batch),
+                               np.array(r_batch), end_of_video,
+                               {'entropy': np.array(entropy_record)}])
 
                 actor_net_params = net_params_queue.get()
                 if actor_net_params == "exit":

@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -55,7 +53,7 @@ class A3C(object):
         self.loss_function = nn.MSELoss()
 
     def get_network_gradient(self, s_batch, a_batch, r_batch, terminal, epoch):
-        s_batch = torch.cat(s_batch).to(self.device)
+        s_batch = torch.from_numpy(s_batch).type('torch.FloatTensor')
         a_batch = torch.LongTensor(a_batch).to(self.device)
         r_batch = torch.tensor(r_batch).to(self.device)
         R_batch = torch.zeros(r_batch.shape).to(self.device)
@@ -90,12 +88,14 @@ class A3C(object):
 
     def select_action(self, stateInputs):
         # if not self.is_central:
+        if isinstance(stateInputs, np.ndarray):
+            stateInputs = torch.from_numpy(stateInputs).type('torch.FloatTensor')
         with torch.no_grad():
             stateInputs_gpu = stateInputs.to(self.device)
             probability = self.actor_network.forward(stateInputs_gpu)
             m = Categorical(probability)
-            action = m.sample().item()
-            return action, probability.cpu().tolist()[0]
+            action = m.sample().detach().cpu().numpy()
+            return action, probability.detach().cpu().numpy()
 
     def hard_update_actor_network(self, actor_net_params):
         for target_param, source_param in zip(self.actor_network.parameters(),
@@ -138,34 +138,9 @@ class A3C(object):
 
 def compute_entropy(x):
     """Given vector x, computes the entropy H(x) = - sum( p * log(p))."""
-    H = 0.0
-    for i in range(len(x)):
-        if 0 < x[i] < 1:
-            H -= x[i] * np.log(x[i])
-    return H
-
-
-# if __name__ == '__main__':
-#     # test maddpg in convid,ok
-#     SINGLE_S_LEN = 19
-#
-#     AGENT_NUM = 1
-#     BATCH_SIZE = 200
-#
-#     S_INFO = 6
-#     S_LEN = 8
-#     ACTION_DIM = 6
-#
-#     discount = 0.9
-#
-#     obj = A3C(False, 0, [S_INFO, S_LEN], ACTION_DIM)
-#
-#     episode = 3000
-#     for i in range(episode):
-#
-#         state = torch.randn(AGENT_NUM, S_INFO, S_LEN)
-#         action = torch.randint(0, 5, (AGENT_NUM,), dtype=torch.long)
-#         reward = torch.randn(AGENT_NUM)
-#         probability, _ = obj.actionSelect(state)
-#         print(probability)
-#
+    return -1 * np.nansum(x * np.log(x), axis=1)
+    # H = 0.0
+    # for i in range(len(x)):
+    #     if 0 < x[i] < 1:
+    #         H -= x[i] * np.log(x[i])
+    # return H
