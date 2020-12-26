@@ -295,3 +295,7 @@ class Environment:
                       'video_chunk_remain': video_chunk_remain}
 
         return self.state, reward, end_of_video, debug_info
+
+    def get_dimension_values(self):
+        return {name: dim.current_value
+                for name, dim in self.dimensions.items()}

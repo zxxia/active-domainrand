@@ -44,6 +44,7 @@ class Pensieve(BaseAgentPolicy):
         self.load_models(actor_path, critic_path)
 
         self.log_dir = log_dir
+        os.makedirs(self.log_dir, exist_ok=True)
         self.model_save_interval = model_save_interval
         self.epoch = 0  # track how many epochs the models have been trained
         self.batch_size = batch_size
@@ -242,7 +243,8 @@ class Pensieve(BaseAgentPolicy):
                 self.net.save_actor_model(os.path.join(
                     self.log_dir, "actor_ep_{}.pth".format(self.epoch + 1)))
 
-                tmp_save_dir = os.path.join(self.log_dir, 'test_results')
+                # tmp_save_dir = os.path.join(self.log_dir, 'test_results')
+                tmp_save_dir = None
                 if val_envs is not None:
                     val_results = self.evaluate_envs(val_envs, tmp_save_dir)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
@@ -352,6 +354,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 epoch += 1
             if end_of_video:
                 net_env.reset()
+                net_env.randomize(None)
                 env_idx = prng.randint(len(net_envs))
                 net_env = net_envs[env_idx]
                 bit_rate = DEFAULT_QUALITY
