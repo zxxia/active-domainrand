@@ -2,9 +2,11 @@
 import csv
 import logging
 import os
+import shutil
 import time
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.multiprocessing as mp
 
@@ -78,7 +80,8 @@ class Pensieve(BaseAgentPolicy):
         for i in range(self.num_agents):
             agents[i].join()
 
-    def evaluate(self, net_env):
+    def evaluate(self, net_env, save_dir=None):
+        torch.set_num_threads(1)
         net_env.reset()
         results = []
         time_stamp = 0
@@ -100,14 +103,46 @@ class Pensieve(BaseAgentPolicy):
             bit_rate = np.argmax(action_prob_vec)
             if end_of_video:
                 break
+        if save_dir is not None:
+            # write to a file for the purpose of multiprocessing
+            log_path = os.path.join(save_dir, "log_sim_rl_{}".format(
+                net_env.trace_file_name))
+            with open(log_path, 'w', 1) as f:
+                csv_writer = csv.writer(f, delimiter='\t', lineterminator="\n")
+                csv_writer.writerows(results)
         return results
 
-    def evaluate_envs(self, net_envs):
-        # TODO: return trajectories consider multiprocessing
-        results = []
-        for net_env in net_envs:
-            results.append(self.evaluate(net_env))
-        return results
+    def evaluate_envs(self, net_envs, save_dir=None):
+        if save_dir is None:
+            # evaluate sequentially
+            results = []
+            for net_env in net_envs:
+                results.append(self.evaluate(net_env))
+            return results
+        else:
+            if os.path.exists(save_dir):
+                shutil.rmtree(save_dir)
+            os.makedirs(save_dir, exist_ok=True)
+            results = []
+            # jobs = []
+            # for net_env in net_envs:
+            #     p = mp.Process(target=self.evaluate, args=(net_env, save_dir))
+            #     p.daemon = True
+            #     jobs.append(p)
+            #     p.start()
+            # for p in jobs:
+            #     p.join()
+            pool = mp.Pool(processes=8)
+            for net_env in net_envs:
+                pool.apply_async(self.evaluate, args=(net_env, save_dir))
+            pool.close()
+            pool.join()
+            for net_env in net_envs:
+                log_path = os.path.join(save_dir, "log_sim_rl_{}".format(
+                    net_env.trace_file_name))
+                result = pd.read_csv(log_path, sep='\t')
+                results.append(result.values.tolist())
+            return results
 
     def select_action(self, state):
         raise NotImplementedError
@@ -186,7 +221,8 @@ class Pensieve(BaseAgentPolicy):
                 total_batch_len += len(r_batch)
                 total_agents += 1.0
                 total_entropy += np.sum(info['entropy'])
-            print('central_agent: {}/{}/{}'.format(epoch, iters, self.epoch))
+            print('central_agent: {}/{}, total epoch trained {}'.format(
+                epoch, int(iters), self.epoch))
 
             # log training information
             self.net.update_network()
@@ -205,8 +241,10 @@ class Pensieve(BaseAgentPolicy):
                     self.log_dir, "critic_ep_{}.pth".format(self.epoch + 1)))
                 self.net.save_actor_model(os.path.join(
                     self.log_dir, "actor_ep_{}.pth".format(self.epoch + 1)))
+
+                tmp_save_dir = os.path.join(self.log_dir, 'test_results')
                 if val_envs is not None:
-                    val_results = self.evaluate_envs(val_envs)
+                    val_results = self.evaluate_envs(val_envs, tmp_save_dir)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
                                    for vid_results in val_results]
                     val_log_writer.writerow([self.epoch + 1,
@@ -217,7 +255,7 @@ class Pensieve(BaseAgentPolicy):
                                              np.percentile(vid_rewards, 95),
                                              np.max(vid_rewards)])
                 if test_envs is not None:
-                    test_results = self.evaluate_envs(test_envs)
+                    test_results = self.evaluate_envs(test_envs, tmp_save_dir)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
                                    for vid_results in test_results]
                     test_log_writer.writerow([self.epoch + 1,
