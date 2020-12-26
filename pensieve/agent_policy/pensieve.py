@@ -78,8 +78,6 @@ class Pensieve(BaseAgentPolicy):
         for i in range(self.num_agents):
             agents[i].join()
 
-        self.epoch += iters
-
     def evaluate(self, net_env):
         net_env.reset()
         results = []
@@ -134,26 +132,22 @@ class Pensieve(BaseAgentPolicy):
                             filemode='w', level=logging.INFO)
 
         assert self.net.is_central
+        log_header = ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
+                      'rewards_median', 'rewards_95per', 'rewards_max']
         test_log_writer = csv.writer(
             open(os.path.join(self.log_dir, 'log_test'), 'w', 1),
             delimiter='\t')
-        test_log_writer.writerow(
-            ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
-             'rewards_median', 'rewards_95per', 'rewards_max'])
+        test_log_writer.writerow(log_header)
 
         train_e2e_log_writer = csv.writer(
             open(os.path.join(self.log_dir, 'log_train_e2e'), 'w', 1),
             delimiter='\t')
-        train_e2e_log_writer.writerow(
-            ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
-             'rewards_median', 'rewards_95per', 'rewards_max'])
+        train_e2e_log_writer.writerow(log_header)
 
         val_log_writer = csv.writer(
             open(os.path.join(self.log_dir, 'log_val'), 'w', 1),
             delimiter='\t')
-        val_log_writer.writerow(
-            ['epoch', 'rewards_min', 'rewards_5per', 'rewards_mean',
-             'rewards_median', 'rewards_95per', 'rewards_max'])
+        val_log_writer.writerow(log_header)
 
         t_start = time.time()
         for epoch in range(int(iters)):
@@ -186,12 +180,13 @@ class Pensieve(BaseAgentPolicy):
             for i in range(self.num_agents):
                 s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
                 self.net.get_network_gradient(
-                    s_batch, a_batch, r_batch, terminal=terminal, epoch=epoch)
+                    s_batch, a_batch, r_batch, terminal=terminal,
+                    epoch=self.epoch)
                 total_reward += np.sum(r_batch)
                 total_batch_len += len(r_batch)
                 total_agents += 1.0
                 total_entropy += np.sum(info['entropy'])
-            print('central_agent: {}/{}'.format(epoch, iters))
+            print('central_agent: {}/{}/{}'.format(epoch, iters, self.epoch))
 
             # log training information
             self.net.update_network()
@@ -200,21 +195,21 @@ class Pensieve(BaseAgentPolicy):
             avg_entropy = total_entropy / total_batch_len
 
             logging.info('Epoch: {} Avg_reward: {} Avg_entropy: {}'.format(
-                epoch, avg_reward, avg_entropy))
+                self.epoch, avg_reward, avg_entropy))
 
-            if (self.epoch+epoch+1) % self.model_save_interval == 0:
+            if (self.epoch+1) % self.model_save_interval == 0:
                 # Save the neural net parameters to disk.
                 print("Train epoch: {}/{}, time use: {}s".format(
                     epoch + 1, iters, time.time() - t_start))
                 self.net.save_critic_model(os.path.join(
-                    self.log_dir, "critic_ep_{}.pth".format(self.epoch+epoch+1)))
+                    self.log_dir, "critic_ep_{}.pth".format(self.epoch + 1)))
                 self.net.save_actor_model(os.path.join(
-                    self.log_dir, "actor_ep_{}.pth".format(self.epoch+epoch+1)))
+                    self.log_dir, "actor_ep_{}.pth".format(self.epoch + 1)))
                 if val_envs is not None:
                     val_results = self.evaluate_envs(val_envs)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
                                    for vid_results in val_results]
-                    val_log_writer.writerow([self.epoch + epoch + 1,
+                    val_log_writer.writerow([self.epoch + 1,
                                              np.min(vid_rewards),
                                              np.percentile(vid_rewards, 5),
                                              np.mean(vid_rewards),
@@ -225,7 +220,7 @@ class Pensieve(BaseAgentPolicy):
                     test_results = self.evaluate_envs(test_envs)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
                                    for vid_results in test_results]
-                    test_log_writer.writerow([self.epoch + epoch + 1,
+                    test_log_writer.writerow([self.epoch + 1,
                                               np.min(vid_rewards),
                                               np.percentile(vid_rewards, 5),
                                               np.mean(vid_rewards),
@@ -235,6 +230,7 @@ class Pensieve(BaseAgentPolicy):
                 t_start = time.time()
                 # TODO: process val results and write into log
                 # evaluate_envs(net, train_envs)
+            self.epoch += 1
 
         # signal all agents to exit, otherwise they block forever.
         for i in range(self.num_agents):
