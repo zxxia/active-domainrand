@@ -119,6 +119,13 @@ class Environment:
                 name=dimension['name'],
                 unit=dimension['unit'])
 
+    def close(self):
+        """Do nothing.
+
+        Placeholder function for elegant exit.
+        """
+        pass
+
     def randomize(self, randomized_values=None):
         """Create a randomized environment.
 

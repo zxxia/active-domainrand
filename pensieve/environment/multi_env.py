@@ -100,7 +100,7 @@ class MultiEnv:
         self.waiting = False
         logger.debug('[step] => DONE')
         obs, rews, dones, infos = zip(*results)
-        return np.stack(obs), np.stack(rews), np.stack(dones), infos
+        return np.stack(obs).squeeze(), np.stack(rews), np.stack(dones), infos
 
     def close(self):
         if self.closed:
