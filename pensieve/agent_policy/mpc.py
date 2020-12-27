@@ -105,16 +105,12 @@ class RobustMPC(BaseAgentPolicy):
                 break
         return results
 
-    def test_envs(self, net_envs):
-        """Evaluate MultiEnv."""
-        jobs = []
-        for net_env in net_envs.net_envs:
-            p = mp.Process(target=self.evaluate, args=(net_env))
-            jobs.append(p)
-            p.start()
-        for p in jobs:
-            p.join()
-            raise NotImplementedError
+    def evaluate_envs(self, net_envs):
+        """Evaluate multipe environment using multiprocessing."""
+        arguments = [(net_env, ) for net_env in net_envs]
+        with mp.Pool(processes=8) as pool:
+            results = pool.starmap(self.evaluate, arguments)
+        return results
 
 
 @jit(nopython=True)

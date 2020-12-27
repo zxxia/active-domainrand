@@ -18,19 +18,20 @@ from pensieve.constants import (A_DIM, ACTOR_LR_RATE, CRITIC_LR_RATE,
 
 
 class Pensieve(BaseAgentPolicy):
+    """Pensieve Implementation.
+
+    Args
+        num_agents(int): number of processes to train pensieve models.
+        log_dir(str): path where all log files and model checkpoints will be
+            saved to.
+        actor_path(None or str): path to a actor checkpoint to be loaded.
+        critic_path(None or str): path to a critic checkpoint to be loaded.
+        model_save_interval(int): the period of caching model checkpoints.
+        batch_size(int): training batch size.
+    """
+
     def __init__(self, num_agents, log_dir, actor_path=None,
                  critic_path=None, model_save_interval=100, batch_size=100):
-        """Construct Pensieve object.
-
-        Args
-            num_agents(int): number of processes to train pensieve models.
-            log_dir(str): path where all log files and model checkpoints will
-            be saved to.
-            actor_path(None or str): path to a actor checkpoint to be loaded.
-            critic_path(None or str): path to a critic checkpoint to be loaded.
-            model_save_interval(int): the period of caching model checkpoints.
-            batch_size(int): training batch size.
-        """
         # https://github.com/pytorch/pytorch/issues/3966
         # mp.set_start_method("spawn")
         self.num_agents = num_agents
@@ -110,40 +111,50 @@ class Pensieve(BaseAgentPolicy):
                 net_env.trace_file_name))
             with open(log_path, 'w', 1) as f:
                 csv_writer = csv.writer(f, delimiter='\t', lineterminator="\n")
+                csv_writer.writerow(['time_stamp', 'bitrate', 'buffer_size',
+                                     'rebuffer', 'video chunk_size', 'delay',
+                                     'reward'])
+
                 csv_writer.writerows(results)
         return results
 
-    def evaluate_envs(self, net_envs, save_dir=None):
-        if save_dir is None:
-            # evaluate sequentially
-            results = []
-            for net_env in net_envs:
-                results.append(self.evaluate(net_env))
-            return results
-        else:
-            if os.path.exists(save_dir):
-                shutil.rmtree(save_dir)
-            os.makedirs(save_dir, exist_ok=True)
-            results = []
-            # jobs = []
-            # for net_env in net_envs:
-            #     p = mp.Process(target=self.evaluate, args=(net_env, save_dir))
-            #     p.daemon = True
-            #     jobs.append(p)
-            #     p.start()
-            # for p in jobs:
-            #     p.join()
-            pool = mp.Pool(processes=8)
-            for net_env in net_envs:
-                pool.apply_async(self.evaluate, args=(net_env, save_dir))
-            pool.close()
-            pool.join()
-            for net_env in net_envs:
-                log_path = os.path.join(save_dir, "log_sim_rl_{}".format(
-                    net_env.trace_file_name))
-                result = pd.read_csv(log_path, sep='\t')
-                results.append(result.values.tolist())
-            return results
+    # def evaluate_envs(self, net_envs, save_dir=None):
+    #     if save_dir is None:
+    #         # evaluate sequentially
+    #         results = []
+    #         for net_env in net_envs:
+    #             results.append(self.evaluate(net_env))
+    #         return results
+    #     else:
+    #         if os.path.exists(save_dir):
+    #             shutil.rmtree(save_dir)
+    #         os.makedirs(save_dir, exist_ok=True)
+    #         results = []
+    #         # jobs = []
+    #         # for net_env in net_envs:
+    #         #     p = mp.Process(target=self.evaluate, args=(net_env, save_dir))
+    #         #     p.daemon = True
+    #         #     jobs.append(p)
+    #         #     p.start()
+    #         # for p in jobs:
+    #         #     p.join()
+    #         pool = mp.Pool(processes=8)
+    #         for net_env in net_envs:
+    #             pool.apply_async(self.evaluate, args=(net_env, save_dir))
+    #         pool.close()
+    #         pool.join()
+    #         for net_env in net_envs:
+    #             log_path = os.path.join(save_dir, "log_sim_rl_{}".format(
+    #                 net_env.trace_file_name))
+    #             result = pd.read_csv(log_path, sep='\t')
+    #             results.append(result.values.tolist())
+    #         return results
+
+    def evaluate_envs(self, net_envs):
+        arguments = [(net_env, ) for net_env in net_envs]
+        with mp.Pool(processes=8) as pool:
+            results = pool.starmap(self.evaluate, arguments)
+        return results
 
     def select_action(self, state):
         raise NotImplementedError
@@ -244,9 +255,8 @@ class Pensieve(BaseAgentPolicy):
                     self.log_dir, "actor_ep_{}.pth".format(self.epoch + 1)))
 
                 # tmp_save_dir = os.path.join(self.log_dir, 'test_results')
-                tmp_save_dir = None
                 if val_envs is not None:
-                    val_results = self.evaluate_envs(val_envs, tmp_save_dir)
+                    val_results = self.evaluate_envs(val_envs)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
                                    for vid_results in val_results]
                     val_log_writer.writerow([self.epoch + 1,
@@ -257,7 +267,7 @@ class Pensieve(BaseAgentPolicy):
                                              np.percentile(vid_rewards, 95),
                                              np.max(vid_rewards)])
                 if test_envs is not None:
-                    test_results = self.evaluate_envs(test_envs, tmp_save_dir)
+                    test_results = self.evaluate_envs(test_envs)
                     vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
                                    for vid_results in test_results]
                     test_log_writer.writerow([self.epoch + 1,
