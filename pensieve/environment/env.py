@@ -133,21 +133,45 @@ class Environment:
            directly assign randomized_values to environment parameters.
 
         Args
-            randomized_values(float): If not None, directly assign this value
-            to the environment parameters. If None, do uniform randomization.
+            randomized_values(dict or None): If None, do uniform randomization.
+                If a dict mapping dimension name to a value, directly assign
+                the value to the corresponding environment parameter.
         """
-        # TODO: need to implement randomized_values assignment.
-        for name, dim in self.dimensions.items():
-            if dim.max_value != dim.min_value:  # no need to random
-                if randomized_values is not None:
-                    # TODO: directly assign the values to a dimension
-                    print('assign', randomized_values)
-                    assert dim.min_value <= randomized_values <= dim.max_value
-                    dim.current_value = randomized_values
-                else:
-                    # uniform randomization
-                    dim.randomize()
-        # TODO: need to consider whether to create a new network trace.
+        regenerate_trace = False
+        if randomized_values is None:
+            for name, dim in self.dimensions.items():
+                if dim.max_value != dim.min_value:  # need to random
+                    if name == 'T_l' or name == 'T_s' or name == 'cov' or \
+                            name == 'duration' or name == 'step' or \
+                            name == 'min_throughput' or \
+                            name == 'max_throughput':
+                        regenerate_trace = True
+                    dim.randomize()  # uniform randomization
+        elif isinstance(randomized_values, dict):
+            for name, dim in randomized_values.items():
+                if name not in self.dimensions:
+                    raise KeyError("Unrecoginized dimension, {}".format(name))
+                new_val = randomized_values[name]
+                if new_val < self.dimensions[name].min_value or  \
+                        new_val > self.dimensions[name].max_value:
+                    raise ValueError(
+                        "New value {} is out of {}'s range [{}, {}].".format(
+                            new_val, name, self.dimensions[name].min_value,
+                            self.dimensions[name].min_value))
+                self.dimensions[name].current_value = randomized_values[name]
+                if name == 'T_l' or name == 'T_s' or name == 'cov' or \
+                        name == 'duration' or name == 'step' or \
+                        name == 'min_throughput' or \
+                        name == 'max_throughput':
+                    regenerate_trace = True
+        else:
+            raise ValueError("Unrecoginized type of input.")
+
+        if regenerate_trace:
+            self.trace_time, self.trace_bw = \
+                self.trace_generator.generate_trace()
+            self.reset()
+            # TODO: may need to save the new network trace.
 
     def reset(self, **kwargs):
         """Reset the environment paramters to default values."""
