@@ -53,7 +53,7 @@ def main():
     mpc_chunk_rewards = []
     chunk_rewards = []
     link_rtt_list = np.arange(10, 1200, 400)
-    buf_thresh_list = np.arange(0, 180, 30)
+    buf_thresh_list = np.arange(0, 180, 20)
     buf_thresh_list[0] = 1
     drain_buffer_time_list = np.arange(0, 1200, 400)
     drain_buffer_time_list[0] = 1
@@ -88,20 +88,26 @@ def main():
                  'packet_payload_portion': round(pkt_payload_portion, 6)})
 
         # test training
+        t_start = time.time()
         results = pensieve_abr.evaluate_envs(test_envs)
         vid_rewards = [np.array(vid_results)[1:, -1]
                        for vid_results in results]
         avg_chunk_reward = np.mean(np.concatenate(vid_rewards))
         chunk_rewards.append(avg_chunk_reward)
+        print('pensieve: {:.5f}s'.format(time.time() - t_start))
 
-        results = mpc_abr.evaluate_envs(test_envs)
-        vid_rewards = [np.array(vid_results)[1:, -2]
-                       for vid_results in results]
-        mpc_avg_chunk_reward = np.mean(np.concatenate(vid_rewards))
-        mpc_chunk_rewards.append(mpc_avg_chunk_reward)
+        # t_start = time.time()
+        # results = mpc_abr.evaluate_envs(test_envs)
+        # vid_rewards = [np.array(vid_results)[1:, -2]
+        #                for vid_results in results]
+        # mpc_avg_chunk_reward = np.mean(np.concatenate(vid_rewards))
+        # mpc_chunk_rewards.append(mpc_avg_chunk_reward)
+        # print('mpc: {:.5f}s'.format(time.time() - t_start))
+        # csv_writer.writerow([buf_thresh, link_rtt, drain_buffer_time,
+        #                      pkt_payload_portion, avg_chunk_reward,
+        #                      mpc_avg_chunk_reward])
         csv_writer.writerow([buf_thresh, link_rtt, drain_buffer_time,
-                             pkt_payload_portion, avg_chunk_reward,
-                             mpc_avg_chunk_reward])
+                             pkt_payload_portion, avg_chunk_reward])
         print("{}/{}".format(i, len(buf_thresh_list)*len(link_rtt_list) * len(drain_buffer_time_list)* len(packet_payload_portion_list)))
     # plt.legend()
     # plt.show()
