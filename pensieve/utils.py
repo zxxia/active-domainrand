@@ -12,7 +12,7 @@ NAMES = ['timestamp', 'bandwidth']
 
 
 def load_traces(trace_dir):
-    trace_files = os.listdir(trace_dir)
+    trace_files = sorted(os.listdir(trace_dir))
     all_ts = []
     all_bw = []
     all_file_names = []
