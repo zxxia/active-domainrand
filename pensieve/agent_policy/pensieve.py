@@ -1,4 +1,3 @@
-import copy
 import csv
 import itertools
 import logging
@@ -74,23 +73,14 @@ class Pensieve(BaseAgentPolicy):
 
         agents = []
         for i in range(self.num_agents):
-            if self.randomization == 'even_udr':
-                agent_train_envs = copy.deepcopy(train_envs)
-                for net_env in agent_train_envs:
-                    for name, dim in net_env.dimensions.items():
-                        if dim.min_value != dim.max_value:
-                            bounds = np.linspace(dim.min_value, dim.max_value,
-                                                 self.num_agents+1)
-                            net_env.dimensions[name].min_value = bounds[i]
-                            net_env.dimensions[name].max_value = bounds[i+1]
-            else:
-                agent_train_envs = train_envs
 
             agents.append(mp.Process(target=agent,
                                      args=(i, net_params_queues[i],
-                                           exp_queues[i], agent_train_envs,
+                                           exp_queues[i], train_envs,
                                            self.log_dir, self.batch_size,
-                                           self.randomization, self.randomization_interval)))
+                                           self.randomization,
+                                           self.randomization_interval,
+                                           self.num_agents)))
         for i in range(self.num_agents):
             agents[i].start()
 
@@ -272,10 +262,20 @@ class Pensieve(BaseAgentPolicy):
 
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
-          batch_size, randomization, randomization_interval):
+          batch_size, randomization, randomization_interval, num_agents):
     torch.set_num_threads(1)
+
+    if randomization == 'even_udr':
+        for net_env in net_envs:
+            for name, dim in net_env.dimensions.items():
+                if dim.min_value != dim.max_value:
+                    bounds = np.linspace(dim.min_value, dim.max_value,
+                                         num_agents+1)
+                    net_env.dimensions[name].min_value = bounds[agent_id]
+                    net_env.dimensions[name].max_value = bounds[agent_id+1]
     # set random seed
     prng = np.random.RandomState(agent_id)
+    # print(str(net_envs[0].get_dims_with_rand()['buffer_threshold']))
 
     with open(os.path.join(summary_dir,
                            'log_agent_'+str(agent_id)), 'w', 1) as log_file:
