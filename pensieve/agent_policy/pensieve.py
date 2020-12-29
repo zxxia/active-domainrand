@@ -280,10 +280,9 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
     with open(os.path.join(summary_dir,
                            'log_agent_'+str(agent_id)), 'w', 1) as log_file:
         csv_writer = csv.writer(log_file, delimiter='\t', lineterminator="\n")
-
-        csv_writer.writerow(['time_stamp', 'bit_rate', 'buffer_size',
-                             'rebuffer', 'video_chunk_size', 'delay',
-                             'reward', 'epoch', 'trace_name', 'chunk_idx',
+        # 'time_stamp', 'bit_rate', 'buffer_size',
+        # 'rebuffer', 'video_chunk_size', 'delay','chunk_idx',
+        csv_writer.writerow(['epoch', 'avg_chunk_reward',  'trace_name',
                              'video_chunk_length', 'buffer_threshold',
                              'link_rtt', 'drain_buffer_sleep_time',
                              'packet_payload_portion', 'T_l', 'T_s', 'cov',
@@ -306,6 +305,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
         s_batch = []
         a_batch = []
         r_batch = []
+        video_chunk_rewards = []
         entropy_record = []
         is_1st_step = True
         epoch_randomization = 0  # track in which epoch randomization occurs
@@ -327,6 +327,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 s_batch.append(state)
                 a_batch.append(bit_rate)
                 r_batch.append(reward)
+                video_chunk_rewards.append(reward)
                 entropy_record.append(compute_entropy(action_prob_vec)[0])
             else:
                 # ignore the first chunck since we can't control it
@@ -334,23 +335,6 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
 
             # log time_stamp, bit_rate, buffer_size, reward
             env_params = net_env.get_dimension_values()
-            csv_writer.writerow([time_stamp, VIDEO_BIT_RATE[bit_rate],
-                                 info['buffer_size'], info['rebuf'],
-                                 info['video_chunk_size'], info['delay'],
-                                 reward, epoch, net_env.trace_file_name,
-                                 net_env.nb_chunk_sent,
-                                 env_params['video_chunk_length'],
-                                 env_params['buffer_threshold'],
-                                 env_params['link_rtt'],
-                                 env_params['drain_buffer_sleep_time'],
-                                 env_params['packet_payload_portion'],
-                                 env_params['T_l'],
-                                 env_params['T_s'],
-                                 env_params['cov'],
-                                 env_params['duration'],
-                                 env_params['step'],
-                                 env_params['min_throughput'],
-                                 env_params['max_throughput']])
             if len(s_batch) == batch_size:
                 exp_queue.put([np.concatenate(s_batch), np.array(a_batch),
                                np.array(r_batch), end_of_video,
@@ -366,12 +350,31 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 entropy_record = []
                 epoch += 1
             if end_of_video:
+                # time_stamp, VIDEO_BIT_RATE[bit_rate],
+                #                      info['buffer_size'], info['rebuf'],
+                #                      info['video_chunk_size'], info['delay'],
+                # net_env.nb_chunk_sent,
+                csv_writer.writerow([epoch, np.mean(video_chunk_rewards),
+                                     net_env.trace_file_name,
+                                     env_params['video_chunk_length'],
+                                     env_params['buffer_threshold'],
+                                     env_params['link_rtt'],
+                                     env_params['drain_buffer_sleep_time'],
+                                     env_params['packet_payload_portion'],
+                                     env_params['T_l'],
+                                     env_params['T_s'],
+                                     env_params['cov'],
+                                     env_params['duration'],
+                                     env_params['step'],
+                                     env_params['min_throughput'],
+                                     env_params['max_throughput']])
                 net_env.reset()
                 if randomization == '':
                     pass  # no randomization
                 elif 'udr' in randomization:
                     if epoch - epoch_randomization >= randomization_interval:
-                        net_env.randomize(None)
+                        for tmp_env in net_envs:
+                            tmp_env.randomize(None)
                         epoch_randomization = epoch
                 else:
                     raise NotImplementedError
@@ -380,6 +383,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 bit_rate = DEFAULT_QUALITY
                 time_stamp = 0
                 is_1st_step = True
+                video_chunk_rewards = []
 
 
 def compare_mpc_pensieve(pensieve_abr, val_envs, param_ranges):

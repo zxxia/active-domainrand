@@ -152,12 +152,12 @@ class Environment:
                 if name not in self.dimensions:
                     raise KeyError("Unrecoginized dimension, {}".format(name))
                 new_val = randomized_values[name]
-                if new_val < self.dimensions[name].min_value or  \
-                        new_val > self.dimensions[name].max_value:
-                    raise ValueError(
-                        "New value {} is out of {}'s range [{}, {}].".format(
-                            new_val, name, self.dimensions[name].min_value,
-                            self.dimensions[name].max_value))
+                # if new_val < self.dimensions[name].min_value or  \
+                #         new_val > self.dimensions[name].max_value:
+                #     raise ValueError(
+                #         "New value {} is out of {}'s range [{}, {}].".format(
+                #             new_val, name, self.dimensions[name].min_value,
+                #             self.dimensions[name].max_value))
                 self.dimensions[name].current_value = randomized_values[name]
                 if name == 'T_l' or name == 'T_s' or name == 'cov' or \
                         name == 'duration' or name == 'step' or \
