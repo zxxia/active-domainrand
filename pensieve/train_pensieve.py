@@ -1,4 +1,6 @@
 import argparse
+import logging
+import os
 
 from pensieve.agent_policy import Pensieve
 from pensieve.environment import Environment
@@ -17,9 +19,20 @@ def parse_args():
                         help='Take as a train batch.')
     parser.add_argument('--model-save-interval', type=int, default=100,
                         help='Save model every n training iterations.')
+    parser.add_argument('--randomization-interval', type=int, default=1,
+                        help='How frequent UDR occurs. Default:')
     # parser.add_argument('--RANDOM_SEED', type=int, default=42, help='')
     parser.add_argument('--total-epoch', type=int, default=50000,
                         help='Total training epoch.')
+    parser.add_argument('--randomization', type=str, default='',
+                        choices=['', 'udr', 'adr', 'even_udr'],
+                        help='Mode of domain randomization. \'\' means no '
+                        'randomization. \'udr\' means uniform domain '
+                        'randomization. Every trainng epoch uniformly sampling'
+                        ' over a large range. \'even_udr\' means it splits the'
+                        ' large range into num-agents small spaces. Each agent'
+                        ' uniformly samples a small range. \'adr\' means '
+                        'active domain randomization.')
 
     # data related paths
     parser.add_argument("--video-size-file-dir", type=str, required=True,
@@ -53,11 +66,31 @@ def parse_args():
     return parser.parse_args()
 
 
+def log_args(args):
+    """Write arguments to log. Assumes args.results_dir exists."""
+    os.makedirs(args.summary_dir, exist_ok=True)
+    log_file = os.path.join(args.summary_dir, 'args')
+    config_logging = logging.getLogger("args")
+    formatter = logging.Formatter('%(asctime)s : %(message)s')
+    file_handler = logging.FileHandler(log_file, mode='w')
+    file_handler.setFormatter(formatter)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    config_logging.setLevel(logging.INFO)
+    config_logging.addHandler(file_handler)
+    config_logging.addHandler(stream_handler)
+    for arg in vars(args):
+        config_logging.info(arg + '\t' + str(getattr(args, arg)))
+
+
 def main():
     args = parse_args()
+    log_args(args)
     pensieve_abr = Pensieve(args.num_agents, args.summary_dir,
                             model_save_interval=args.model_save_interval,
-                            batch_size=args.batch_size)
+                            batch_size=args.batch_size,
+                            randomization=args.randomization,
+                            randomization_interval=args.randomization_interval)
 
     # prepare train dataset
     traces_time, traces_bw, traces_names = load_traces(args.train_trace_dir)

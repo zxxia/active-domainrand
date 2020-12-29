@@ -28,3 +28,8 @@ class Dimension(object):
     def set(self, value):
         """Set Dimension's value."""
         self.current_value = value
+
+    def __str__(self):
+        return "{}: default={}, current={}, range=[{}, {}], unit={}".format(
+            self.name, self.default_value, self.current_value,
+            self.min_value, self.max_value, self.unit)

@@ -12,7 +12,7 @@
             "name": "buffer_threshold",
             "default": 60.0,
             "min": 1.0,
-            "max": 3600.0,
+            "max": 600.0,
             "unit": "second"
         },
         {

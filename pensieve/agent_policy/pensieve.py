@@ -1,17 +1,16 @@
-
+import copy
 import csv
+import itertools
 import logging
 import os
-import shutil
 import time
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.multiprocessing as mp
 
 from pensieve.a3c import A3C, compute_entropy
-from pensieve.agent_policy import BaseAgentPolicy
+from pensieve.agent_policy import BaseAgentPolicy, RobustMPC
 from pensieve.constants import (A_DIM, ACTOR_LR_RATE, CRITIC_LR_RATE,
                                 DEFAULT_QUALITY, M_IN_K, S_INFO, S_LEN,
                                 VIDEO_BIT_RATE)
@@ -28,10 +27,15 @@ class Pensieve(BaseAgentPolicy):
         critic_path(None or str): path to a critic checkpoint to be loaded.
         model_save_interval(int): the period of caching model checkpoints.
         batch_size(int): training batch size.
+        randomization(str): If '', no domain randomization. All
+            environment parameters will leave as default values. If 'udr',
+            uniform domain randomization. If 'adr', active domain
+            randomization.
     """
 
     def __init__(self, num_agents, log_dir, actor_path=None,
-                 critic_path=None, model_save_interval=100, batch_size=100):
+                 critic_path=None, model_save_interval=100, batch_size=100,
+                 randomization='', randomization_interval=1):
         # https://github.com/pytorch/pytorch/issues/3966
         # mp.set_start_method("spawn")
         self.num_agents = num_agents
@@ -49,6 +53,8 @@ class Pensieve(BaseAgentPolicy):
         self.model_save_interval = model_save_interval
         self.epoch = 0  # track how many epochs the models have been trained
         self.batch_size = batch_size
+        self.randomization = randomization
+        self.randomization_interval = randomization_interval
 
     def train(self, train_envs, val_envs=None, test_envs=None, iters=1e5,
               reference_agent_policy=None):
@@ -68,15 +74,28 @@ class Pensieve(BaseAgentPolicy):
 
         agents = []
         for i in range(self.num_agents):
+            if self.randomization == 'even_udr':
+                agent_train_envs = copy.deepcopy(train_envs)
+                for net_env in agent_train_envs:
+                    for name, dim in net_env.dimensions.items():
+                        if dim.min_value != dim.max_value:
+                            bounds = np.linspace(dim.min_value, dim.max_value,
+                                                 self.num_agents+1)
+                            net_env.dimensions[name].min_value = bounds[i]
+                            net_env.dimensions[name].max_value = bounds[i+1]
+            else:
+                agent_train_envs = train_envs
+
             agents.append(mp.Process(target=agent,
                                      args=(i, net_params_queues[i],
-                                           exp_queues[i], train_envs,
-                                           self.log_dir, self.batch_size)))
+                                           exp_queues[i], agent_train_envs,
+                                           self.log_dir, self.batch_size,
+                                           self.randomization, self.randomization_interval)))
         for i in range(self.num_agents):
             agents[i].start()
 
-        self.central_agent(net_params_queues, exp_queues, iters, val_envs,
-                           test_envs)
+        self.central_agent(net_params_queues, exp_queues, iters, train_envs,
+                           val_envs, test_envs)
 
         # wait unit training is done
         for i in range(self.num_agents):
@@ -118,46 +137,11 @@ class Pensieve(BaseAgentPolicy):
                 csv_writer.writerows(results)
         return results
 
-    # def evaluate_envs(self, net_envs, save_dir=None):
-    #     if save_dir is None:
-    #         # evaluate sequentially
-    #         results = []
-    #         for net_env in net_envs:
-    #             results.append(self.evaluate(net_env))
-    #         return results
-    #     else:
-    #         if os.path.exists(save_dir):
-    #             shutil.rmtree(save_dir)
-    #         os.makedirs(save_dir, exist_ok=True)
-    #         results = []
-    #         # jobs = []
-    #         # for net_env in net_envs:
-    #         #     p = mp.Process(target=self.evaluate, args=(net_env, save_dir))
-    #         #     p.daemon = True
-    #         #     jobs.append(p)
-    #         #     p.start()
-    #         # for p in jobs:
-    #         #     p.join()
-    #         pool = mp.Pool(processes=8)
-    #         for net_env in net_envs:
-    #             pool.apply_async(self.evaluate, args=(net_env, save_dir))
-    #         pool.close()
-    #         pool.join()
-    #         for net_env in net_envs:
-    #             log_path = os.path.join(save_dir, "log_sim_rl_{}".format(
-    #                 net_env.trace_file_name))
-    #             result = pd.read_csv(log_path, sep='\t')
-    #             results.append(result.values.tolist())
-    #         return results
-
     def evaluate_envs(self, net_envs):
         arguments = [(net_env, ) for net_env in net_envs]
         with mp.Pool(processes=8) as pool:
             results = pool.starmap(self.evaluate, arguments)
         return results
-
-    def select_action(self, state):
-        raise NotImplementedError
 
     def save_models(self, model_save_path):
         """Save models to a directory."""
@@ -171,8 +155,8 @@ class Pensieve(BaseAgentPolicy):
         if critic_model_path is not None:
             self.net.load_critic_model(critic_model_path)
 
-    def central_agent(self, net_params_queues, exp_queues, iters, val_envs,
-                      test_envs):
+    def central_agent(self, net_params_queues, exp_queues, iters, train_envs,
+                      val_envs, test_envs):
         torch.set_num_threads(2)
 
         logging.basicConfig(filename=os.path.join(self.log_dir, 'log_central'),
@@ -288,7 +272,7 @@ class Pensieve(BaseAgentPolicy):
 
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
-          batch_size):
+          batch_size, randomization, randomization_interval):
     torch.set_num_threads(1)
     # set random seed
     prng = np.random.RandomState(agent_id)
@@ -299,8 +283,12 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
 
         csv_writer.writerow(['time_stamp', 'bit_rate', 'buffer_size',
                              'rebuffer', 'video_chunk_size', 'delay',
-                             'reward',
-                             'epoch', 'trace_idx', 'mahimahi_ptr'])
+                             'reward', 'epoch', 'trace_name', 'chunk_idx',
+                             'video_chunk_length', 'buffer_threshold',
+                             'link_rtt', 'drain_buffer_sleep_time',
+                             'packet_payload_portion', 'T_l', 'T_s', 'cov',
+                             'duration', 'step', 'min_throughput',
+                             'max_throughput'])
 
         # initial synchronization of the network parameters from the
         # coordinator
@@ -320,6 +308,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
         r_batch = []
         entropy_record = []
         is_1st_step = True
+        epoch_randomization = 0  # track in which epoch randomization occurs
         while True:
 
             # the action is from the last decision
@@ -344,10 +333,24 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 is_1st_step = False
 
             # log time_stamp, bit_rate, buffer_size, reward
+            env_params = net_env.get_dimension_values()
             csv_writer.writerow([time_stamp, VIDEO_BIT_RATE[bit_rate],
                                  info['buffer_size'], info['rebuf'],
                                  info['video_chunk_size'], info['delay'],
-                                 reward, epoch, env_idx])
+                                 reward, epoch, net_env.trace_file_name,
+                                 net_env.nb_chunk_sent,
+                                 env_params['video_chunk_length'],
+                                 env_params['buffer_threshold'],
+                                 env_params['link_rtt'],
+                                 env_params['drain_buffer_sleep_time'],
+                                 env_params['packet_payload_portion'],
+                                 env_params['T_l'],
+                                 env_params['T_s'],
+                                 env_params['cov'],
+                                 env_params['duration'],
+                                 env_params['step'],
+                                 env_params['min_throughput'],
+                                 env_params['max_throughput']])
             if len(s_batch) == batch_size:
                 exp_queue.put([np.concatenate(s_batch), np.array(a_batch),
                                np.array(r_batch), end_of_video,
@@ -364,9 +367,60 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 epoch += 1
             if end_of_video:
                 net_env.reset()
-                net_env.randomize(None)
+                if randomization == '':
+                    pass  # no randomization
+                elif 'udr' in randomization:
+                    if epoch - epoch_randomization >= randomization_interval:
+                        net_env.randomize(None)
+                        epoch_randomization = epoch
+                else:
+                    raise NotImplementedError
                 env_idx = prng.randint(len(net_envs))
                 net_env = net_envs[env_idx]
                 bit_rate = DEFAULT_QUALITY
+                time_stamp = 0
                 is_1st_step = True
-                log_file.write('\n')  # mark video ends in log
+
+
+def compare_mpc_pensieve(pensieve_abr, val_envs, param_ranges):
+    num_small_ranges = 3
+    mpc_abr = RobustMPC()
+    candidates = []
+    range_indices = []
+    for param in sorted(param_ranges):
+        boundaries = np.linspace(*param_ranges[param], num_small_ranges+1)
+        # need a seed here
+        values = [np.random.uniform(lower, upper)
+                  for lower, upper in zip(boundaries[:-1], boundaries[1:])]
+        candidates.append(values)
+        range_indices.append(list(range(num_small_ranges)))
+
+    mpc_pensieve_reward_diffs = []
+    for param_tuple in itertools.product(*candidates):
+        randomized_values = {}
+        for param, value in zip(sorted(param_ranges), param_tuple):
+            randomized_values[param] = value
+        print(param_tuple, randomized_values)
+        for net_env in val_envs:
+            net_env.randomize(randomized_values)
+        mpc_results = mpc_abr.evaluate_envs(val_envs)
+        pensieve_results = pensieve_abr.evaluate_envs(val_envs)
+        mpc_reward = np.mean(np.concatenate(
+            [np.array(vid_results)[1:, -2] for vid_results in mpc_results]))
+        pensieve_reward = np.mean(np.concatenate(
+            [np.array(vid_results)[1:, -1]
+                for vid_results in pensieve_results]))
+        mpc_pensieve_reward_diffs.append(mpc_reward - pensieve_reward)
+    print(mpc_pensieve_reward_diffs)
+    max_gap_range_idx = np.argmax(mpc_pensieve_reward_diffs)
+    final_range_idices = list(itertools.product(
+        *range_indices))[max_gap_range_idx]
+    print(mpc_pensieve_reward_diffs[max_gap_range_idx], final_range_idices)
+
+    selected_ranges = {}
+    for param, range_idx in zip(sorted(param_ranges), final_range_idices):
+        boundaries = np.linspace(*param_ranges[param], num_small_ranges+1)
+        selected_ranges[param] = (boundaries[:-1][range_idx],
+                                  boundaries[1:][range_idx])
+    print(selected_ranges)
+    return selected_ranges

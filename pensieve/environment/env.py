@@ -157,7 +157,7 @@ class Environment:
                     raise ValueError(
                         "New value {} is out of {}'s range [{}, {}].".format(
                             new_val, name, self.dimensions[name].min_value,
-                            self.dimensions[name].min_value))
+                            self.dimensions[name].max_value))
                 self.dimensions[name].current_value = randomized_values[name]
                 if name == 'T_l' or name == 'T_s' or name == 'cov' or \
                         name == 'duration' or name == 'step' or \
@@ -323,3 +323,7 @@ class Environment:
     def get_dimension_values(self):
         return {name: dim.current_value
                 for name, dim in self.dimensions.items()}
+
+    def get_dims_with_rand(self):
+        return {name: dim for name, dim in self.dimensions.items()
+                if dim.min_value != dim.max_value}
