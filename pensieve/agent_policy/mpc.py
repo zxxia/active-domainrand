@@ -105,10 +105,10 @@ class RobustMPC(BaseAgentPolicy):
                 break
         return results
 
-    def evaluate_envs(self, net_envs):
+    def evaluate_envs(self, net_envs, n_proc=mp.cpu_count()//2):
         """Evaluate multipe environment using multiprocessing."""
         arguments = [(net_env, ) for net_env in net_envs]
-        with mp.Pool(processes=8) as pool:
+        with mp.Pool(processes=n_proc) as pool:
             results = pool.starmap(self.evaluate, arguments)
         return results
 
