@@ -39,9 +39,9 @@ def parse_args():
                         help='Dir to video size files')
     parser.add_argument("--train-env-config", type=str, required=True,
                         help='Path to training environment configuration.')
-    parser.add_argument("--val-env-config", type=str, required=True,
+    parser.add_argument("--val-env-config", type=str, default=None,
                         help='Path to training environment configuration.')
-    parser.add_argument("--test-env-config", type=str, required=True,
+    parser.add_argument("--test-env-config", type=str, default=None,
                         help='Path to training environment configuration.')
     parser.add_argument("--train-trace-dir", type=str, default=None,
                         help='Dir to all train traces. When None, then use'
@@ -105,28 +105,33 @@ def main():
         train_envs.append(net_env)
 
     # prepare train dataset
-    traces_time, traces_bw, traces_names = load_traces(args.val_trace_dir)
-    val_envs = []
-    for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
-            zip(traces_time, traces_bw, traces_names)):
-        net_env = Environment(args.video_size_file_dir, args.val_env_config,
-                              trace_idx, trace_time=trace_time,
-                              trace_bw=trace_bw,
-                              trace_file_name=trace_filename, fixed=True,
-                              trace_video_same_duration_flag=True)
-        val_envs.append(net_env)
+    val_envs = None
+    if args.val_trace_dir is not None:
+        traces_time, traces_bw, traces_names = load_traces(args.val_trace_dir)
+        val_envs = []
+        for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
+                zip(traces_time, traces_bw, traces_names)):
+            net_env = Environment(args.video_size_file_dir, args.
+                                  val_env_config,
+                                  trace_idx, trace_time=trace_time,
+                                  trace_bw=trace_bw,
+                                  trace_file_name=trace_filename, fixed=True,
+                                  trace_video_same_duration_flag=True)
+            val_envs.append(net_env)
 
     # prepare test dataset
-    test_envs = []
-    traces_time, traces_bw, traces_names = load_traces(args.test_trace_dir)
-    for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
-            zip(traces_time, traces_bw, traces_names)):
-        net_env = Environment(args.video_size_file_dir, args.test_env_config,
-                              trace_idx, trace_time=trace_time,
-                              trace_bw=trace_bw,
-                              trace_file_name=trace_filename, fixed=True,
-                              trace_video_same_duration_flag=True)
-        test_envs.append(net_env)
+    test_envs = None
+    if args.test_trace_dir is not None:
+        test_envs = []
+        traces_time, traces_bw, traces_names = load_traces(args.test_trace_dir)
+        for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
+                zip(traces_time, traces_bw, traces_names)):
+            net_env = Environment(args.video_size_file_dir,
+                                  args.test_env_config, trace_idx,
+                                  trace_time=trace_time, trace_bw=trace_bw,
+                                  trace_file_name=trace_filename, fixed=True,
+                                  trace_video_same_duration_flag=True)
+            test_envs.append(net_env)
 
     # test training
     pensieve_abr.train(train_envs, val_envs=val_envs, test_envs=test_envs,
