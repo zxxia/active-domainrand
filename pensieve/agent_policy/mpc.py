@@ -57,7 +57,7 @@ class RobustMPC(BaseAgentPolicy):
         future_bandwidth = harmonic_bandwidth / (1 + max_error)  # robustMPC
         self.past_bandwidth_ests.append(harmonic_bandwidth)
 
-        bit_rate = predict_birate(
+        bit_rate = predict_bitrate(
             future_chunk_cnt, buffer_size, bit_rate, last_index,
             future_bandwidth, video_size, self.chunk_combo_options,
             self.bitrate_options)
@@ -114,16 +114,15 @@ class RobustMPC(BaseAgentPolicy):
 
 
 @jit(nopython=True)
-def predict_birate(future_chunk_length, buffer_size, bit_rate, last_index,
-                   future_bandwidth, video_size, chunk_combo_options,
-                   bitrate_options):
+def predict_bitrate(future_chunk_length, buffer_size, bit_rate, last_index,
+                    future_bandwidth, video_size, chunk_combo_options,
+                    bitrate_options):
     max_reward = np.NINF
     best_combo = ()
     start_buffer = buffer_size
 
     for full_combo in chunk_combo_options:
-        # print(type(future_chunk_length))
-        combo = full_combo[0:future_chunk_length]
+        combo = full_combo[0:int(future_chunk_length)]
         # calculate total rebuffer time for this combination (start with
         # start_buffer and subtract each download time and add 2 seconds in
         # that order)
