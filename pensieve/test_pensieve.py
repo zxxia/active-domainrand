@@ -29,6 +29,8 @@ def parse_args():
     parser.add_argument("--test-trace-dir", type=str, default=None,
                         help='Dir to all test traces. When None, then use '
                         'the simulator generated traces.')
+    parser.add_argument("--dataset-name", type=str, default=None,
+                        help='Name of testing dataset.')
 
     # model related paths
     parser.add_argument("--summary-dir", type=str, required=True,
@@ -52,21 +54,20 @@ def main():
     args = parse_args()
 
     # prepare test dataset
-    link_rtt_list = np.arange(10, 1200, 400)
-    buf_thresh_list = np.arange(0, 180, 20)
-    buf_thresh_list[0] = 1
-    drain_buffer_time_list = np.arange(0, 1200, 400)
-    drain_buffer_time_list[0] = 1
-    packet_payload_portion_list = np.arange(0.70, 1.1, 0.1)
+    link_rtt_list = [10, 100, 1000, 10000]
+    buf_thresh_list = [20, 30, 60, 160]
+    drain_buffer_time_list = [100, 400, 800, 1000]
+    packet_payload_portion_list = [0.5, 0.7, 0.9, 1.0]
     nb_config_combos = len(buf_thresh_list) * len(link_rtt_list) * \
         len(drain_buffer_time_list) * len(packet_payload_portion_list)
     if args.abr == 'pensieve':
         abr = Pensieve(1, args.summary_dir, actor_path=args.actor_path)
-        log_filename = '{}_test_results.csv'.format(
-            os.path.splitext(os.path.basename(args.actor_path))[0])
+        log_filename = '{}_test_{}_results.csv'.format(
+            os.path.splitext(os.path.basename(args.actor_path))[0],
+            args.dataset_name)
     elif args.abr == 'mpc':
         abr = RobustMPC()
-        log_filename = 'mpc_test_results.csv'
+        log_filename = 'mpc_test_{}_results.csv'.format(args.dataset_name)
     csv_writer = csv.writer(open(os.path.join(args.summary_dir, log_filename),
                                  'w', 1), lineterminator='\n')
     csv_writer.writerow(['buffer_threshold', 'link_rtt',
