@@ -2,10 +2,11 @@
 import numpy as np
 
 
-def transition(state, variance, prob_stay, bitrate_states, transition_probs):
+def transition(state, variance, prob_stay, bitrate_states, transition_probs,
+               prng):
     """Hidden Markov State transition."""
     # variance_switch_prob, sigma_low, sigma_high,
-    transition_prob = np.random.uniform()
+    transition_prob = prng.uniform()
 
     if transition_prob < prob_stay:  # stay in current state
         return state
@@ -20,7 +21,7 @@ def transition(state, variance, prob_stay, bitrate_states, transition_probs):
         trans_sum = sum(curr_transition_probs)
         normalized_trans = [x/trans_sum for x in curr_transition_probs]
         # generate a random number and see which bin it falls in to
-        trans_switch_val = np.random.uniform()
+        trans_switch_val = prng.uniform()
         running_sum = 0
         num_switches = -1
         for ind in range(0, len(normalized_trans)):
@@ -36,7 +37,7 @@ def transition(state, variance, prob_stay, bitrate_states, transition_probs):
         switch_down = curr_pos - num_switches
         # can go either way
         if (switch_down >= 0 and switch_up <= (len(bitrate_states)-1)):
-            x = np.random.uniform(0, 1)
+            x = prng.uniform(0, 1)
             if (x < 0.5):
                 return switch_up
             else:
@@ -51,9 +52,8 @@ class TraceGenerator(object):
     """Trace generator used to simulate a network trace."""
 
     def __init__(self, T_l, T_s, cov, duration, steps, min_throughput,
-                 max_throughput):
+                 max_throughput, seed):
         """Construct a trace generator."""
-        # TODO: random seed may need here
         self.T_l = T_l
         self.T_s = T_s
         self.cov = cov
@@ -66,6 +66,7 @@ class TraceGenerator(object):
         coeffs = np.ones(self.steps - 1)
         coeffs[0] = -1
         self.switch_parameter = np.real(np.roots(coeffs)[0])
+        self.prng = np.random.RandomState(seed)
 
     def generate_trace(self):
         """Generate a network trace."""
@@ -88,7 +89,7 @@ class TraceGenerator(object):
 
         # takes a state and decides what the next state is
 
-        current_state = int(np.random.randint(0, len(bitrate_states)-1))
+        current_state = int(self.prng.randint(0, len(bitrate_states)-1))
         current_variance = self.cov * bitrate_states[current_state]
         ts = 0
         cnt = 0
@@ -97,15 +98,15 @@ class TraceGenerator(object):
         while ts < self.duration:
             # prints timestamp (in seconds) and throughput (in Mbits/s)
             if cnt <= 0:
-                noise = np.random.normal(0, current_variance, 1)[0]
+                noise = self.prng.normal(0, current_variance, 1)[0]
                 cnt = self.T_s
-            # TODO: the gaussian val is at least 0.1
+            # the gaussian val is at least 0.1
             gaus_val = max(0.1, bitrate_states[current_state] + noise)
             trace_time.append(ts)
             trace_bw.append(gaus_val)
             cnt -= 1
             next_val = transition(current_state, current_variance, prob_stay,
-                                  bitrate_states, transition_probs)
+                                  bitrate_states, transition_probs, self.prng)
             if current_state != next_val:
                 cnt = 0
             current_state = next_val

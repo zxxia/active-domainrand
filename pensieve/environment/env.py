@@ -54,7 +54,7 @@ class Environment:
                 self.dimensions['duration'].current_value,
                 self.dimensions['step'].current_value,
                 self.dimensions['min_throughput'].current_value,
-                self.dimensions['max_throughput'].current_value)
+                self.dimensions['max_throughput'].current_value, seed)
             self.trace_time, self.trace_bw = \
                 self.trace_generator.generate_trace()
             self.trace_file_name = None
@@ -158,7 +158,7 @@ class Environment:
                 #         "New value {} is out of {}'s range [{}, {}].".format(
                 #             new_val, name, self.dimensions[name].min_value,
                 #             self.dimensions[name].max_value))
-                self.dimensions[name].current_value = randomized_values[name]
+                self.dimensions[name].current_value = new_val
                 if name == 'T_l' or name == 'T_s' or name == 'cov' or \
                         name == 'duration' or name == 'step' or \
                         name == 'min_throughput' or \
@@ -168,8 +168,23 @@ class Environment:
             raise ValueError("Unrecoginized type of input.")
 
         if regenerate_trace:
+            self.trace_generator.T_l = self.dimensions['T_l'].current_value
+            self.trace_generator.T_s = self.dimensions['T_s'].current_value
+            self.trace_generator.cov = self.dimensions['cov'].current_value
+            self.trace_generator.duration = \
+                self.dimensions['duration'].current_value
+            self.trace_generator.steps = self.dimensions['step'].current_value
+            self.trace_generator.min_throughput = \
+                self.dimensions['min_throughput'].current_value
+            self.trace_generator.max_throughput = \
+                self.dimensions['max_throughput'].current_value
             self.trace_time, self.trace_bw = \
                 self.trace_generator.generate_trace()
+            # print('generate trace!', self.trace_generator.T_l,
+            #       self.trace_generator.T_s, self.trace_generator.cov,
+            #       self.trace_generator.duration, self.trace_generator.steps,
+            #       self.trace_generator.min_throughput,
+            #       self.trace_generator.max_throughput)
             self.reset()
             # TODO: may need to save the new network trace.
 

@@ -93,16 +93,22 @@ def main():
                             randomization_interval=args.randomization_interval)
 
     # prepare train dataset
-    traces_time, traces_bw, traces_names = load_traces(args.train_trace_dir)
-    train_envs = []
-    for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
-            zip(traces_time, traces_bw, traces_names)):
-        net_env = Environment(args.video_size_file_dir, args.train_env_config,
-                              trace_idx, trace_time=trace_time,
-                              trace_bw=trace_bw,
-                              trace_file_name=trace_filename, fixed=False,
-                              trace_video_same_duration_flag=True)
-        train_envs.append(net_env)
+    if args.train_trace_dir is not None:
+        traces_time, traces_bw, traces_names = load_traces(
+            args.train_trace_dir)
+        train_envs = []
+        for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
+                zip(traces_time, traces_bw, traces_names)):
+            net_env = Environment(args.video_size_file_dir,
+                                  args.train_env_config, trace_idx,
+                                  trace_time=trace_time, trace_bw=trace_bw,
+                                  trace_file_name=trace_filename, fixed=False,
+                                  trace_video_same_duration_flag=True)
+            train_envs.append(net_env)
+    else:
+        train_envs = [Environment(args.video_size_file_dir,
+                                  args.train_env_config, 0, fixed=False,
+                                  trace_video_same_duration_flag=True)]
 
     # prepare train dataset
     val_envs = None

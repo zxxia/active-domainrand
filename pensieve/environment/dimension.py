@@ -13,7 +13,6 @@ class Dimension(object):
         self.name = name
         self.unit = unit
 
-        # TODO: doesn't this change the random seed for all numpy uses?
         self.prng = np.random.RandomState(seed)
 
     def randomize(self):
