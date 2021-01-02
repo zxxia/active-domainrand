@@ -157,17 +157,17 @@ class Pensieve(BaseAgentPolicy):
                       'rewards_median', 'rewards_95per', 'rewards_max']
         test_log_writer = csv.writer(
             open(os.path.join(self.log_dir, 'log_test'), 'w', 1),
-            delimiter='\t')
+            delimiter='\t', lineterminator='\n')
         test_log_writer.writerow(log_header)
 
         train_e2e_log_writer = csv.writer(
             open(os.path.join(self.log_dir, 'log_train_e2e'), 'w', 1),
-            delimiter='\t')
+            delimiter='\t', lineterminator='\n')
         train_e2e_log_writer.writerow(log_header)
 
         val_log_writer = csv.writer(
             open(os.path.join(self.log_dir, 'log_val'), 'w', 1),
-            delimiter='\t')
+            delimiter='\t', lineterminator='\n')
         val_log_writer.writerow(log_header)
 
         t_start = time.time()

@@ -68,7 +68,7 @@ def main():
         abr = RobustMPC()
         log_filename = 'mpc_test_results.csv'
     csv_writer = csv.writer(open(os.path.join(args.summary_dir, log_filename),
-                                 'w', 1))
+                                 'w', 1), lineterminator='\n')
     csv_writer.writerow(['buffer_threshold', 'link_rtt',
                          'drain_buffer_sleep_time', 'packet_payload_portion',
                          'avg_chunk_reward'])
