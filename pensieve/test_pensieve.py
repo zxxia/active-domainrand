@@ -68,6 +68,8 @@ def main():
     elif args.abr == 'mpc':
         abr = RobustMPC()
         log_filename = 'mpc_test_{}_results.csv'.format(args.dataset_name)
+    else:
+        raise NotImplementedError
     csv_writer = csv.writer(open(os.path.join(args.summary_dir, log_filename),
                                  'w', 1), lineterminator='\n')
     csv_writer.writerow(['buffer_threshold', 'link_rtt',
@@ -111,6 +113,8 @@ def main():
                            for vid_results in results]
             avg_chunk_reward = np.mean(np.concatenate(vid_rewards))
             print('mpc: {:.5f}s'.format(time.time() - t_start))
+        else:
+            raise NotImplementedError
         csv_writer.writerow([buf_thresh, link_rtt, drain_buffer_time,
                              pkt_payload_portion, avg_chunk_reward])
         print("{}/{}".format(i, nb_config_combos))
