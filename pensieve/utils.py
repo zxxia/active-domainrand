@@ -1,12 +1,13 @@
-
 import math
 import os
-import numpy as np
 import random
+import re
 
+import numpy as np
 from numba import jit
-from pensieve.constants import (VIDEO_BIT_RATE, HD_REWARD, SMOOTH_PENALTY,
-                                REBUF_PENALTY, M_IN_K)
+
+from pensieve.constants import (HD_REWARD, M_IN_K, REBUF_PENALTY,
+                                SMOOTH_PENALTY, VIDEO_BIT_RATE)
 
 NAMES = ['timestamp', 'bandwidth']
 
@@ -179,112 +180,10 @@ def hd_reward(current_bitrate_idx, last_bitrate_idx, rebuffer):
     return reward
 
 
-def evaluate_policy(nagents, net_envs, agent_policy,  # replay_buffer,
-                    eval_episodes, max_steps, freeze_agent=True,
-                    return_rewards=False,
-                    add_noise=False, log_distances=True,  # gail_rewarder=None,
-                    noise_scale=0.1, min_buffer_len=1000):
-    """Evaluate a given policy in a set of environments.
+def natural_sort(arr):
+    """Natural sort list."""
+    def convert(text): return int(text) if text.isdigit() else text.lower()
 
-    Return an array of rewards received from the evaluation step.
-    """
-    # TODO: environemnts have the same random seed. Need to fix, consider
-    # multiproc
-    # warning: runnable but may have logic errors Double check the logic.
-    assert nagents == len(net_envs)
-    states_list = [[] for _ in range(nagents)]
-    actions_list = [[] for _ in range(nagents)]
-    next_states_list = [[] for _ in range(nagents)]
-    rewards_list = [[] for _ in range(nagents)]
-    ep_rewards = []
-    final_dists = []
-
-    for ep in range(eval_episodes):
-        agent_total_rewards = np.zeros(nagents)
-        states = []
-        rewards = []
-        actions = []
-        dones = []
-        infos = []
-        for net_env in net_envs:
-            net_env.reset()
-            state, reward, done, info = net_env.step(1)
-            states.append(state)
-            rewards.append(reward)
-            dones.append(done)
-            infos.append(info)
-
-        # done = [False] * nagents
-        add_to_buffer = [True] * nagents
-        steps = 0
-        training_iters = 0
-
-        while not all(dones) and steps <= max_steps:
-            actions = []
-            for state in states:
-                actions.append(agent_policy.select_action(state))
-
-            next_states = []
-            rewards = []
-            dones = []
-            infos = []
-            for net_env, action in zip(net_envs, actions):
-                next_state, reward, done, info = net_env.step(action)
-                next_states.append(next_state)
-                rewards.append(reward)
-                dones.append(done)
-                infos.append(info)
-
-            for i, st in enumerate(states):
-                if add_to_buffer[i]:
-                    states_list[i].append(st)
-                    actions_list[i].append(actions[i])
-                    next_states_list[i].append(next_states[i])
-                    rewards_list[i].append(rewards[i])
-                    agent_total_rewards[i] += rewards[i]
-                    training_iters += 1
-
-                    # if replay_buffer is not None:
-                    #     done_bool = 0 if steps + \
-                    #         1 == max_steps else float(done[i])
-                    #     replay_buffer.add(
-                    #         (state[i], next_state[i], action[i], reward[i], done_bool))
-
-                if dones[i]:
-                    # Avoid duplicates
-                    add_to_buffer[i] = False
-
-                    if log_distances:
-                        final_dists.append(info[i]['goal_dist'])
-
-            state = next_state
-            steps += 1
-
-        # Train for total number of env iterations
-        # and len(replay_buffer.storage) > min_buffer_len:
-        if not freeze_agent:
-            # agent_policy.train(replay_buffer=replay_buffer,
-            #                    iterations=training_iters)
-            agent_policy.train(net_envs, iters=training_iters)
-
-        ep_rewards.append(agent_total_rewards)
-
-    if return_rewards:
-        return np.array(ep_rewards).flatten(), np.array(final_dists).flatten()
-
-    trajectories = []
-    for i in range(nagents):
-        # print(np.array(states_list[i])[:, 0, :, -1].shape)
-        # print(np.array(actions_list[i]).reshape((-1, 1)).shape)
-        # print(np.array(next_states_list[i])[:, 0, :, -1].shape)
-        # TODO: what states to use here
-        # pensive models take a matrix as state
-        # here only takes the latest state
-        trajectories.append(np.concatenate(
-            [
-                np.array(states_list[i])[:, 0, :, -1],
-                np.array(actions_list[i]).reshape((-1, 1)),
-                np.array(next_states_list[i])[:, 0, :, -1]
-            ], axis=-1))
-
-    return trajectories
+    def alphanum_key(key): return [convert(c)
+                                   for c in re.split('([0-9]+)', key)]
+    return sorted(arr, key=alphanum_key)
