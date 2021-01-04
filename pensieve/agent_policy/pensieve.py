@@ -336,10 +336,10 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
             # this is to make the framework similar to the real
             state, reward, end_of_video, info = net_env.step(bit_rate)
 
-            action ,action_prob_vec = net.select_action( state )
+            action, action_prob_vec = net.select_action( state )
+            action = action[0]
             bit_rate = calculate_from_selection( action ,last_bit_rate )
-            # print(action_prob_vec, "----action_prob_vec")
-            # print(bit_rate, "------bitrate")
+
             last_bit_rate = bit_rate
             # Note: we need to discretize the probability into 1/RAND_RANGE
             # steps, because there is an intrinsic discrepancy in passing
@@ -349,7 +349,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
             time_stamp += info['sleep_time']  # in ms
             if not is_1st_step:
                 s_batch.append(state)
-                a_batch.append(bit_rate)
+                a_batch.append(action)
                 r_batch.append(reward)
                 video_chunk_rewards.append(reward)
                 entropy_record.append(compute_entropy(action_prob_vec)[0])

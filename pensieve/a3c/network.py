@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+BITRATE_DIM = 6
 
 class ActorNetwork(nn.Module):
     """Pytorch Implementaion of Pensieve's Actor Network."""
@@ -12,7 +13,7 @@ class ActorNetwork(nn.Module):
         super(ActorNetwork, self).__init__()
         self.s_dim = state_dim
         self.a_dim = action_dim
-        self.bitrate_dim = 6
+        self.bitrate_dim = BITRATE_DIM
         self.vectorOutDim = n_conv
         self.scalarOutDim = n_fc
         self.numFcInput = 2 * self.vectorOutDim * \
@@ -106,7 +107,7 @@ class CriticNetwork(nn.Module):
         super(CriticNetwork, self).__init__()
         self.s_dim = state_dim
         self.a_dim = a_dim
-        self.bitrate_dim = 6
+        self.bitrate_dim = BITRATE_DIM
         self.vectorOutDim = n_conv
         self.scalarOutDim = n_fc
         self.numFcInput = 2 * self.vectorOutDim * \
@@ -129,7 +130,7 @@ class CriticNetwork(nn.Module):
 
         self.fullyConnected = nn.Linear(self.numFcInput, self.numFcOutput)
 
-        self.outputLayer = nn.Linear(self.numFcOutput, self.a_dim)
+        self.outputLayer = nn.Linear(self.numFcOutput, 1)
 
         # ------------------init layer weight--------------------
         # tensorflow-1.12 uses glorot_uniform(also called xavier_uniform) to

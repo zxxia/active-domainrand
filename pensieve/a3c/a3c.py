@@ -6,6 +6,7 @@ from torch.distributions import Categorical
 from pensieve.a3c.network import ActorNetwork, CriticNetwork
 
 RAND_RANGE = 1000
+BITRATE_DIM = 6
 
 
 def entropy_weight_decay_func(epoch):
@@ -19,6 +20,8 @@ class A3C(object):
                  actor_lr=1e-4, critic_lr=1e-3):
         self.s_dim = s_dim
         self.a_dim = action_dim
+        self.bitrate_dim = BITRATE_DIM
+
         self.discount = 0.99
         self.entropy_weight = 0.5
         self.entropy_eps = 1e-6
@@ -65,8 +68,6 @@ class A3C(object):
         with torch.no_grad():
             v_batch = self.critic_network.forward(
                 s_batch).squeeze().to(self.device)
-        print(R_batch.shape, "--R_batch")
-        print(v_batch.shape, "--v_batch")
 
         td_batch = R_batch-v_batch
         # else:
