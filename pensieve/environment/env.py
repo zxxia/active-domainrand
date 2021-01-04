@@ -321,7 +321,7 @@ class Environment:
             BUFFER_NORM_FACTOR
         self.state[0, 2, -1] = video_chunk_size / delay / M_IN_K  # kbyte/ms
         self.state[0, 3, -1] = delay / M_IN_K / BUFFER_NORM_FACTOR  # 10 sec
-        self.state[0, 4, :A_DIM] = np.array(
+        self.state[0, 4, :6] = np.array(
             next_video_chunk_sizes) / M_IN_K / M_IN_K
         self.state[0, 5, -1] = video_chunk_remain / self.total_video_chunk
 

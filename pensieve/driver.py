@@ -1,5 +1,7 @@
-import logging
+import sys
+sys.path.append("/Users/lesley/ADR-Pensieve")
 
+import logging
 # import gym
 import matplotlib
 import numpy as np
