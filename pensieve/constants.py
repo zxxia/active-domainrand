@@ -11,7 +11,7 @@ DEFAULT_QUALITY = 1  # default video quality without agent
 # time), chunk_til_video_end
 S_INFO = 6
 S_LEN = 8  # take how many frames in the past
-A_DIM = 3
+A_DIM = 6
 ACTOR_LR_RATE = 0.0001
 CRITIC_LR_RATE = 0.001
 BUFFER_NORM_FACTOR = 10.0

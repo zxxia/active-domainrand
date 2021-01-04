@@ -65,6 +65,9 @@ class A3C(object):
         with torch.no_grad():
             v_batch = self.critic_network.forward(
                 s_batch).squeeze().to(self.device)
+        print(R_batch.shape, "--R_batch")
+        print(v_batch.shape, "--v_batch")
+
         td_batch = R_batch-v_batch
         # else:
         #     td_batch = R_batch

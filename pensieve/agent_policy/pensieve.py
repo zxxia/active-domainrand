@@ -337,9 +337,9 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
             state, reward, end_of_video, info = net_env.step(bit_rate)
 
             action ,action_prob_vec = net.select_action( state )
-            action_selection = np.argmax( action_prob_vec )
-            print(action_selection, "---------selection")
-            bit_rate = calculate_from_selection( action_selection ,last_bit_rate )
+            bit_rate = calculate_from_selection( action ,last_bit_rate )
+            # print(action_prob_vec, "----action_prob_vec")
+            # print(bit_rate, "------bitrate")
             last_bit_rate = bit_rate
             # Note: we need to discretize the probability into 1/RAND_RANGE
             # steps, because there is an intrinsic discrepancy in passing

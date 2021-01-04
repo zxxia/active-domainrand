@@ -41,7 +41,7 @@ class ActorNetwork(nn.Module):
 
         self.fullyConnected = nn.Linear(self.numFcInput, self.numFcOutput)
 
-        self.outputLayer = nn.Linear(self.numFcOutput, self.bitrate_dim)
+        self.outputLayer = nn.Linear(self.numFcOutput, self.a_dim)
         # ------------------init layer weight--------------------
         # tensorflow-1.12 uses glorot_uniform(also called xavier_uniform) to
         # initialize weight
@@ -129,7 +129,7 @@ class CriticNetwork(nn.Module):
 
         self.fullyConnected = nn.Linear(self.numFcInput, self.numFcOutput)
 
-        self.outputLayer = nn.Linear(self.numFcOutput, 1)
+        self.outputLayer = nn.Linear(self.numFcOutput, self.a_dim)
 
         # ------------------init layer weight--------------------
         # tensorflow-1.12 uses glorot_uniform(also called xavier_uniform) to
