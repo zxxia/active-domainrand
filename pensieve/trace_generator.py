@@ -1,5 +1,6 @@
 """Trace generator module."""
 import numpy as np
+import random
 
 
 def transition(state, variance, prob_stay, bitrate_states, transition_probs,
@@ -112,4 +113,49 @@ class TraceGenerator(object):
             current_state = next_val
             current_variance = self.cov * bitrate_states[current_state]
             ts += 1
+        return trace_time, trace_bw
+
+
+class RandomTraceGenerator(object):
+    """
+    Trace generator used to simulate a network trace.
+    non-MDP logic
+    """
+
+    def __init__(self, T_l, T_s, cov, duration, steps, min_throughput,
+                 max_throughput, seed):
+        """Construct a trace generator."""
+        self.T_s = T_s
+        self.duration = duration
+        self.min_throughput = min_throughput
+        self.max_throughput = max_throughput
+
+    def generate_trace(self):
+        """Generate a network trace."""
+        round_digit = 2
+        ts = 0
+        cnt = 0
+        trace_time = []
+        trace_bw = []
+        last_val = round( np.random.uniform( self.min_throughput, self.max_throughput ) ,round_digit )
+
+        while trace_time < self.duration:
+            if cnt <= 0:
+                bw_val = round( np.random.uniform( self.min_throughput, self.max_throughput ) ,round_digit )
+                cnt = np.random.randint( 1, self.T_s + 1 )
+
+            elif cnt >= 1:
+                bw_val = last_val
+            else:
+                bw_val = round( np.random.uniform( self.min_throughput, self.max_throughput ) ,round_digit )
+
+            cnt -= 1
+            ts = round( ts ,2 )
+
+            last_val = bw_val
+            time_noise = random.uniform( 0.1 ,3.5 )
+            ts += time_noise
+            trace_time.append( ts )
+            trace_bw.append( bw_val )
+
         return trace_time, trace_bw
