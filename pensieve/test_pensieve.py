@@ -31,6 +31,8 @@ def parse_args():
                         'the simulator generated traces.')
     parser.add_argument("--dataset-name", type=str, default=None,
                         help='Name of testing dataset.')
+    parser.add_argument("--constant-video-duration", action='store_true',
+                        help='48 chunks if specified.')
 
     # model related paths
     parser.add_argument("--summary-dir", type=str, required=True,
@@ -54,20 +56,36 @@ def main():
     args = parse_args()
 
     # prepare test dataset
-    link_rtt_list = [10, 100, 1000, 10000]
-    buf_thresh_list = [20, 30, 60, 160]
-    drain_buffer_time_list = [100, 400, 800, 1000]
-    packet_payload_portion_list = [0.5, 0.7, 0.9, 1.0]
+    # old_link_rtt_list = [10, 100, 1000, 10000]
+    # old_buf_thresh_list = [20, 30, 60, 160]
+    # old_drain_buffer_time_list = [100, 400, 800, 1000]
+    # old_packet_payload_portion_list = [0.5, 0.7, 0.9, 1.0]
+    # link_rtt_list = [100, 200, 300]
+    # buf_thresh_list = [60, 100, 120]
+    # drain_buffer_time_list = [400, 500, 600]
+    # packet_payload_portion_list = [0.7, 0.8, 0.9]
+    link_rtt_list = [10, 100, 200, 300, 10000]
+    buf_thresh_list = [20, 30, 60, 100, 120]
+    drain_buffer_time_list = [100, 400, 500, 600, 800, 1000]
+    packet_payload_portion_list = [0.5, 0.7, 0.8, 0.9, 1.0]
     nb_config_combos = len(buf_thresh_list) * len(link_rtt_list) * \
         len(drain_buffer_time_list) * len(packet_payload_portion_list)
     if args.abr == 'pensieve':
         abr = Pensieve(1, args.summary_dir, actor_path=args.actor_path)
-        log_filename = '{}_test_{}_results.csv'.format(
-            os.path.splitext(os.path.basename(args.actor_path))[0],
-            args.dataset_name)
+        if args.constant_video_duration:
+            log_filename = '{}_test_{}_results_48.csv'.format(
+                os.path.splitext(os.path.basename(args.actor_path))[0],
+                args.dataset_name)
+        else:
+            log_filename = '{}_test_{}_results.csv'.format(
+                os.path.splitext(os.path.basename(args.actor_path))[0],
+                args.dataset_name)
     elif args.abr == 'mpc':
         abr = RobustMPC()
-        log_filename = 'mpc_test_{}_results.csv'.format(args.dataset_name)
+        if args.constant_video_duration:
+            log_filename = 'mpc_test_{}_results_48.csv'.format(args.dataset_name)
+        else:
+            log_filename = 'mpc_test_{}_results.csv'.format(args.dataset_name)
     else:
         raise NotImplementedError
     csv_writer = csv.writer(open(os.path.join(args.summary_dir, log_filename),
@@ -84,12 +102,18 @@ def main():
                               args.test_env_config, trace_idx,
                               trace_time=trace_time, trace_bw=trace_bw,
                               trace_file_name=trace_filename, fixed=True,
-                              trace_video_same_duration_flag=True)
+                              trace_video_same_duration_flag=(not args.constant_video_duration))
         test_envs.append(net_env)
     for i, (buf_thresh, link_rtt, drain_buffer_time, pkt_payload_portion) in \
         enumerate(itertools.product(buf_thresh_list, link_rtt_list,
                                     drain_buffer_time_list,
                                     packet_payload_portion_list)):
+        # if buf_thresh in old_buf_thresh_list and \
+        #     link_rtt in old_link_rtt_list and \
+        #     drain_buffer_time in old_drain_buffer_time_list and \
+        #     pkt_payload_portion in old_packet_payload_portion_list:
+        #         continue
+
         for net_env in test_envs:
             net_env.reset()
             net_env.randomize(
