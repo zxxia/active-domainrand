@@ -12,11 +12,12 @@ class ActorNetwork(nn.Module):
         super(ActorNetwork, self).__init__()
         self.s_dim = state_dim
         self.a_dim = action_dim
+        self.bitrate_dim = 6
         self.vectorOutDim = n_conv
         self.scalarOutDim = n_fc
         self.numFcInput = 2 * self.vectorOutDim * \
             (self.s_dim[1] - 4 + 1) + 3 * self.scalarOutDim + \
-            self.vectorOutDim * (self.a_dim - 4 + 1)
+            self.vectorOutDim * (self.bitrate_dim - 4 + 1)
         self.numFcOutput = n_fc1
 
         # -------------------define layer-------------------
@@ -40,7 +41,7 @@ class ActorNetwork(nn.Module):
 
         self.fullyConnected = nn.Linear(self.numFcInput, self.numFcOutput)
 
-        self.outputLayer = nn.Linear(self.numFcOutput, self.a_dim)
+        self.outputLayer = nn.Linear(self.numFcOutput, self.bitrate_dim)
         # ------------------init layer weight--------------------
         # tensorflow-1.12 uses glorot_uniform(also called xavier_uniform) to
         # initialize weight
@@ -72,7 +73,7 @@ class ActorNetwork(nn.Module):
         dConv1dOut = F.relu(self.dConv1d(inputs[:, 3:4, :]), inplace=True)
 
         cConv1dOut = F.relu(self.cConv1d(
-            inputs[:, 4:5, :self.a_dim]), inplace=True)
+            inputs[:, 4:5, :self.bitrate_dim]), inplace=True)
 
         leftChunkFcOut = F.relu(self.leftChunkFc(
             inputs[:, 5:6, -1]), inplace=True)
@@ -105,11 +106,12 @@ class CriticNetwork(nn.Module):
         super(CriticNetwork, self).__init__()
         self.s_dim = state_dim
         self.a_dim = a_dim
+        self.bitrate_dim = 6
         self.vectorOutDim = n_conv
         self.scalarOutDim = n_fc
         self.numFcInput = 2 * self.vectorOutDim * \
             (self.s_dim[1] - 4 + 1) + 3 * self.scalarOutDim + \
-            self.vectorOutDim * (self.a_dim - 4 + 1)
+            self.vectorOutDim * (self.bitrate_dim - 4 + 1)
         self.numFcOutput = n_fc1
 
         # ----------define layer----------------------
@@ -159,7 +161,7 @@ class CriticNetwork(nn.Module):
         dConv1dOut = F.relu(self.dConv1d(inputs[:, 3:4, :]), inplace=True)
 
         cConv1dOut = F.relu(self.cConv1d(
-            inputs[:, 4:5, :self.a_dim]), inplace=True)
+            inputs[:, 4:5, :self.bitrate_dim]), inplace=True)
 
         leftChunkFcOut = F.relu(self.leftChunkFc(
             inputs[:, 5:6, -1]), inplace=True)

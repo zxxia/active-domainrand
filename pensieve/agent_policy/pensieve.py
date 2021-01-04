@@ -96,6 +96,7 @@ class Pensieve(BaseAgentPolicy):
         net_env.reset()
         results = []
         time_stamp = 0
+        last_bit_rate = DEFAULT_QUALITY
         bit_rate = DEFAULT_QUALITY
         while True:  # serve video forever
             # the action is from the last decision
@@ -110,8 +111,11 @@ class Pensieve(BaseAgentPolicy):
                             info['video_chunk_size'], info['delay'], reward])
 
             state = torch.from_numpy(state).type('torch.FloatTensor')
-            bit_rate, action_prob_vec = self.net.select_action(state)
-            bit_rate = np.argmax(action_prob_vec)
+            action, action_prob_vec = self.net.select_action(state)
+            action_selection = np.argmax(action_prob_vec)
+            bit_rate = calculate_from_selection(action_selection, last_bit_rate)
+            last_bit_rate = bit_rate
+
             if end_of_video:
                 break
         if save_dir is not None:
@@ -260,6 +264,22 @@ class Pensieve(BaseAgentPolicy):
         for i in range(self.num_agents):
             net_params_queues[i].put("exit")
 
+def calculate_from_selection(selected, last_bit_rate):
+    # naive step implementation
+    # action=0, bitrate-1; action=1, bitrate stay; action=2, bitrate+1
+    if selected == 1:
+        bit_rate = last_bit_rate
+    elif selected == 2:
+        bit_rate = last_bit_rate + 1
+    else:
+        bit_rate = last_bit_rate - 1
+    # bound
+    if bit_rate < 0:
+        bit_rate = 0
+    if bit_rate > 5:
+        bit_rate = 5
+
+    return bit_rate
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
           batch_size, randomization, randomization_interval, num_agents):
@@ -309,14 +329,18 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
         entropy_record = []
         is_1st_step = True
         epoch_randomization = 0  # track in which epoch randomization occurs
+        last_bit_rate=DEFAULT_QUALITY
         while True:
 
             # the action is from the last decision
             # this is to make the framework similar to the real
             state, reward, end_of_video, info = net_env.step(bit_rate)
 
-            bit_rate, action_prob_vec = net.select_action(state)
-            bit_rate = bit_rate[0]
+            action ,action_prob_vec = net.select_action( state )
+            action_selection = np.argmax( action_prob_vec )
+            print(action_selection, "---------selection")
+            bit_rate = calculate_from_selection( action_selection ,last_bit_rate )
+            last_bit_rate = bit_rate
             # Note: we need to discretize the probability into 1/RAND_RANGE
             # steps, because there is an intrinsic discrepancy in passing
             # single state and batch states

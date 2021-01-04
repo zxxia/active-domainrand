@@ -7,7 +7,7 @@ import torch
 from pensieve.discriminator_rewarder import DiscriminatorRewarder
 # from common.envs.randomized_vecenv import make_vec_envs
 from common.svpg.svpg import SVPG
-from pensieve.utils import evaluate_policy  # check_solved,
+#from pensieve.utils import evaluate_policy  # check_solved,
 
 from pensieve.environment import Environment, MultiEnv
 from pensieve.constants import S_LEN, A_DIM

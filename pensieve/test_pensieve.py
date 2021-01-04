@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/Users/lesley/ADR-Pensieve")
+
 import argparse
 import csv
 import itertools

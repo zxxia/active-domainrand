@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/Users/lesley/ADR-Pensieve")
+
 import argparse
 import logging
 import os
@@ -5,6 +8,7 @@ import os
 from pensieve.agent_policy import Pensieve
 from pensieve.environment import Environment
 from pensieve.utils import load_traces
+
 
 
 def parse_args():
