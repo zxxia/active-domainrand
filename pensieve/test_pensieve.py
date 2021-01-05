@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument("--abr", type=str, required=True, default='pensieve',
                         choices=['pensieve', 'mpc'],
                         help='supported ABR algorithm.')
-    parser.add_argument( "--training_with_jump_action" ,type=bool, required=True ,default=False ,
+    parser.add_argument( "--training_with_jump_action" ,type=bool, default=False,
                          help='if True: training with jump-action' )
     # parser.add_argument("--env-random-start", action="store_true",
     #                     help='environment will randomly start a new trace'

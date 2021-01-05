@@ -62,7 +62,7 @@ def parse_args():
                         help='Folder to save all training results.')
     parser.add_argument("--nn-model", type=str, default=None,
                         help='model path')
-    parser.add_argument( "--training_with_jump_action" ,type=bool, required=True, default=False,
+    parser.add_argument( "--training_with_jump_action" ,type=bool, default=False,
                          help='if True: training with jump-action' )
 
     # parser.add_argument("--env-random-start", action="store_true",
