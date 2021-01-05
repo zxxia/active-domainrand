@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument("--abr", type=str, required=True, default='pensieve',
                         choices=['pensieve', 'mpc'],
                         help='supported ABR algorithm.')
+    parser.add_argument( "--training_with_jump_action" ,type=bool, required=True ,default=False ,
+                         help='if True: training with jump-action' )
     # parser.add_argument("--env-random-start", action="store_true",
     #                     help='environment will randomly start a new trace'
     #                     'in training stage if environment is not fixed if '
@@ -64,7 +66,7 @@ def main():
     nb_config_combos = len(buf_thresh_list) * len(link_rtt_list) * \
         len(drain_buffer_time_list) * len(packet_payload_portion_list)
     if args.abr == 'pensieve':
-        abr = Pensieve(1, args.summary_dir, actor_path=args.actor_path)
+        abr = Pensieve(1, args.summary_dir, actor_path=args.actor_path, jump_action=args.training_with_jump_action)
         log_filename = '{}_test_{}_results.csv'.format(
             os.path.splitext(os.path.basename(args.actor_path))[0],
             args.dataset_name)

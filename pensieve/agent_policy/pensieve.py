@@ -34,7 +34,7 @@ class Pensieve(BaseAgentPolicy):
 
     def __init__(self, num_agents, log_dir, actor_path=None,
                  critic_path=None, model_save_interval=100, batch_size=100,
-                 randomization='', randomization_interval=1):
+                 randomization='', randomization_interval=1, jump_action=False):
         # https://github.com/pytorch/pytorch/issues/3966
         # mp.set_start_method("spawn")
         self.num_agents = num_agents
@@ -54,6 +54,7 @@ class Pensieve(BaseAgentPolicy):
         self.batch_size = batch_size
         self.randomization = randomization
         self.randomization_interval = randomization_interval
+        self.jump_action = jump_action
 
     def train(self, train_envs, val_envs=None, test_envs=None, iters=1e5,
               reference_agent_policy=None):
@@ -80,7 +81,8 @@ class Pensieve(BaseAgentPolicy):
                                            self.log_dir, self.batch_size,
                                            self.randomization,
                                            self.randomization_interval,
-                                           self.num_agents)))
+                                           self.num_agents,
+                                           self.jump_action)))
         for i in range(self.num_agents):
             agents[i].start()
 
@@ -113,7 +115,11 @@ class Pensieve(BaseAgentPolicy):
             state = torch.from_numpy(state).type('torch.FloatTensor')
             action, action_prob_vec = self.net.select_action(state)
             action_selection = np.argmax(action_prob_vec)
-            bit_rate = calculate_from_selection(action_selection, last_bit_rate)
+            if self.jump_action:
+                bit_rate = calculate_from_selection(action_selection, last_bit_rate)
+            else:
+                bit_rate = action_selection
+
             last_bit_rate = bit_rate
 
             if end_of_video:
@@ -282,7 +288,7 @@ def calculate_from_selection(selected, last_bit_rate):
     return bit_rate
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
-          batch_size, randomization, randomization_interval, num_agents):
+          batch_size, randomization, randomization_interval, num_agents, jump_action):
     torch.set_num_threads(1)
 
     if randomization == 'even_udr':
@@ -338,7 +344,10 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
 
             action, action_prob_vec = net.select_action( state )
             action = action[0]
-            bit_rate = calculate_from_selection( action ,last_bit_rate )
+            if jump_action:
+                bit_rate = calculate_from_selection( action ,last_bit_rate )
+            else:
+                bit_rate = action
 
             last_bit_rate = bit_rate
             # Note: we need to discretize the probability into 1/RAND_RANGE

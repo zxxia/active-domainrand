@@ -62,6 +62,9 @@ def parse_args():
                         help='Folder to save all training results.')
     parser.add_argument("--nn-model", type=str, default=None,
                         help='model path')
+    parser.add_argument( "--training_with_jump_action" ,type=bool, required=True, default=False,
+                         help='if True: training with jump-action' )
+
     # parser.add_argument("--env-random-start", action="store_true",
     #                     help='environment will randomly start a new trace'
     #                     'in training stage if environment is not fixed if '
@@ -94,7 +97,8 @@ def main():
                             model_save_interval=args.model_save_interval,
                             batch_size=args.batch_size,
                             randomization=args.randomization,
-                            randomization_interval=args.randomization_interval)
+                            randomization_interval=args.randomization_interval,
+                            jump_action=args.training_with_jump_action)
 
     # prepare train dataset
     if args.train_trace_dir is not None:
