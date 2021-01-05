@@ -352,21 +352,3 @@ class SVPGSimulatorAgent(object):
                                          log_distances=self.log_distances)
 
         return trajectory
-
-    def sample_trajectories(self, batch_size):
-        indices = np.random.randint(0, len(self.extracted_trajectories['states']), batch_size)
-
-        states = self.extracted_trajectories['states']
-        actions = self.extracted_trajectories['actions']
-        next_states = self.extracted_trajectories['next_states']
-
-        trajectories = []
-        for i in indices:
-            trajectories.append(np.concatenate(
-                [
-                    np.array(states[i]),
-                    np.array(actions[i]),
-                    np.array(next_states[i])
-                ], axis=-1))
-        return trajectories
-

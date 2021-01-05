@@ -5,8 +5,52 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 from common.models.discriminator import MLPDiscriminator
+from pensieve.agent_policy.pensieve import Pensieve, RobustMPC
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+class SVPGReward(object):
+    def __init__(self, nagents, nparams, svpg_rollout_length):
+        self.nagents = nagents
+        self.nparams = nparams
+        self.svpg_rollout_length = svpg_rollout_length
+
+    def calculate_rewards(self, test_envs, last_ref_reward):
+        '''
+        Calculate RL-MPC reward for SVPG to learn
+        :param test_envs: all the particles of current env parameter setting
+        :param last_ref_reward: RL-MPC reward for all particles from the last round of test_envs
+        :return: RL-MPC reward for all particles
+        '''
+
+        ref_reward_all = np.zeros((self.nagents, self.svpg_rollout_length, 1))
+
+        for i in range(self.nagents):
+            for t in range(self.svpg_rollout_length):
+
+                # RL reward
+                rl_results = Pensieve.evaluate_envs( test_envs[i][t] )
+                rl_vid_rewards = [np.array( vid_results )[1: ,-1]
+                               for vid_results in rl_results]
+                RL_avg_chunk_reward = np.mean( np.concatenate( rl_vid_rewards ) )
+
+                # MPC reward
+                mpc_results = RobustMPC.evaluate_envs( test_envs[i][t] )
+                mpc_vid_rewards = [np.array( vid_results )[1: ,-1]
+                               for vid_results in mpc_results]
+                MPC_avg_chunk_reward = np.mean( np.concatenate( mpc_vid_rewards ) )
+
+                ref_reward = RL_avg_chunk_reward - MPC_avg_chunk_reward
+                if ref_reward < 0 or ref_reward > 0 & last_ref_reward[i][t]<0:
+                    reward_weight = 100
+                else:
+                    reward_weight = 1
+                ref_reward = reward_weight * ref_reward
+
+                ref_reward_all[i][t] = ref_reward
+
+        return ref_reward_all
 
 
 class DiscriminatorRewarder(object):

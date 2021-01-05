@@ -4,9 +4,9 @@ import numpy as np
 import torch
 
 # from common.agents.ddpg.replay_buffer import ReplayBuffer
-from pensieve.discriminator_rewarder import DiscriminatorRewarder
+from pensieve.discriminator_rewarder import SVPGReward
 # from common.envs.randomized_vecenv import make_vec_envs
-from common.svpg.svpg import SVPG
+from pensieve.svpg.svpg import SVPG
 #from pensieve.utils import evaluate_policy  # check_solved,
 
 from pensieve.environment import Environment, MultiEnv
@@ -99,13 +99,8 @@ class SVPGSimulatorAgent(object):
 
         # variables for discriminator
         self.freeze_discriminator = freeze_discriminator
-        self.discriminator_rewarder = DiscriminatorRewarder(
-            state_dim=self.state_dim,
-            action_dim=self.action_dim,
-            discriminator_batchsz=discriminator_batchsz,
-            reward_scale=reward_scale,
-            load_discriminator=load_discriminator,
-        )
+        self.discriminator_rewarder = SVPGReward(
+            nagents, nparams, svpg_rollout_length)
 
         # variables for SVPG
         self.svpg_horizon = svpg_horizon
@@ -249,123 +244,10 @@ class SVPGSimulatorAgent(object):
                     simulation_instances[:, :, dimension].flatten()])
 
         solved_reference = info = None
-        # if self.agent_timesteps_since_eval > self.agent_eval_frequency:
-        #     self.agent_timesteps_since_eval %= self.agent_eval_frequency
-        #     logger.info("Evaluating for {} episodes afer timesteps: {} (SVPG), {} (Agent)".format(
-        #         self.randomized_eval_episodes * self.nagents, self.svpg_timesteps, self.agent_timesteps))
-        #
-        #     agent_reference_eval_rewards = []
-        #     agent_randomized_eval_rewards = []
-        #
-        #     final_dist_ref = []
-        #     final_dist_rand = []
-        #
-        #     for _ in range(self.randomized_eval_episodes):
-        #         rewards_ref, dist_ref = evaluate_policy(
-        #             nagents=self.nagents, net_envs=self.reference_env,
-        #             agent_policy=agent_policy,  # replay_buffer=None,
-        #             eval_episodes=1, max_steps=self.max_env_timesteps,
-        #             return_rewards=True, add_noise=False,
-        #             log_distances=self.log_distances)
-        #
-        #         full_random_settings = np.ones(
-        #             (self.nagents, self.nparams)) * -1
-        #         self.randomized_env.randomize(
-        #             randomized_values=full_random_settings)
-        #
-        #         rewards_rand, dist_rand = evaluate_policy(
-        #             nagents=self.nagents, net_envs=self.randomized_env,
-        #             agent_policy=agent_policy,  # replay_buffer=None,
-        #             eval_episodes=1, max_steps=self.max_env_timesteps,
-        #             return_rewards=True, add_noise=False,
-        #             log_distances=self.log_distances)
-        #
-        #         agent_reference_eval_rewards += list(rewards_ref)
-        #         agent_randomized_eval_rewards += list(rewards_rand)
-        #         final_dist_ref += [dist_ref]
-        #         final_dist_rand += [dist_rand]
-        #
-        #     evaluation_criteria_reference = agent_reference_eval_rewards
-        #     evaluation_criteria_randomized = agent_randomized_eval_rewards
-        #
-        #     if self.log_distances:
-        #         evaluation_criteria_reference = final_dist_ref
-        #         evaluation_criteria_randomized = final_dist_rand
-
-            # solved_reference = check_solved(
-            #     self.reference_env_id, evaluation_criteria_reference)
-            # solved_randomized = check_solved(
-            #     self.randomized_eval_env_id, evaluation_criteria_randomized)
-            #
-            # info = {
-            #     'solved': str(solved_reference),
-            #     'solved_randomized': str(solved_randomized),
-            #     'svpg_steps': self.svpg_timesteps,
-            #     'agent_timesteps': self.agent_timesteps,
-            #     'final_dist_ref_mean': np.mean(final_dist_ref),
-            #     'final_dist_ref_std': np.std(final_dist_ref),
-            #     'final_dist_ref_median': np.median(final_dist_ref),
-            #     'final_dist_rand_mean': np.mean(final_dist_rand),
-            #     'final_dist_rand_std': np.std(final_dist_rand),
-            #     'final_dist_rand_median': np.median(final_dist_rand),
-            #     'agent_reference_eval_rewards_mean': np.mean(agent_reference_eval_rewards),
-            #     'agent_reference_eval_rewards_std': np.std(agent_reference_eval_rewards),
-            #     'agent_reference_eval_rewards_median': np.median(agent_reference_eval_rewards),
-            #     'agent_reference_eval_rewards_min': np.min(agent_reference_eval_rewards),
-            #     'agent_reference_eval_rewards_max': np.max(agent_reference_eval_rewards),
-            #     'agent_randomized_eval_rewards_mean': np.mean(agent_randomized_eval_rewards),
-            #     'agent_randomized_eval_rewards_std': np.std(agent_randomized_eval_rewards),
-            #     'agent_randomized_eval_rewards_median': np.median(agent_randomized_eval_rewards),
-            #     'agent_randomized_eval_rewards_min': np.min(agent_randomized_eval_rewards),
-            #     'agent_randomized_eval_rewards_max': np.max(agent_randomized_eval_rewards),
-            #     'randomized_discrim_score_mean': str(randomized_discrim_score_mean),
-            #     'reference_discrim_score_mean': str(reference_discrim_score_mean),
-            #     'randomized_discrim_score_median': str(randomized_discrim_score_median),
-            #     'reference_discrim_score_median': str(reference_discrim_score_median),
-            #
-            # }
-            #
-            # agent_hard_eval_rewards, final_dist_hard = evaluate_policy(
-            #     nagents=self.nagents, env=self.hard_env,
-            #     agent_policy=agent_policy,  # replay_buffer=None,
-            #     eval_episodes=1, max_steps=self.max_env_timesteps,
-            #     return_rewards=True, add_noise=False,
-            #     log_distances=self.log_distances)
-            # info_hard = {
-            #     'final_dist_hard_mean': np.mean(final_dist_hard),
-            #     'final_dist_hard_std': np.std(final_dist_hard),
-            #     'final_dist_hard_median': np.median(final_dist_hard),
-            #     'agent_hard_eval_rewards_median': np.median(agent_hard_eval_rewards),
-            #     'agent_hard_eval_rewards_mean': np.mean(agent_hard_eval_rewards),
-            #     'agent_hard_eval_rewards_std': np.std(agent_hard_eval_rewards),
-            # }
-            #
-            # info.update(info_hard)
 
         self.svpg_timesteps += 1
         return solved_reference, info
 
-    # def rollout_agent(self, agent_policy, reference=True, eval_episodes=None):
-    #     """Roll out agent_policy in the specified environment."""
-    #     if reference:
-    #         if eval_episodes is None:
-    #             eval_episodes = self.episodes_per_instance
-    #         trajectory = evaluate_policy(
-    #             nagents=self.nagents, net_envs=self.reference_env,
-    #             agent_policy=agent_policy,  # replay_buffer=None,
-    #             eval_episodes=eval_episodes, max_steps=self.max_env_timesteps,
-    #             freeze_agent=True, add_noise=False,
-    #             log_distances=self.log_distances)
-    #     else:
-    #         trajectory = evaluate_policy(
-    #             nagents=self.nagents, net_envs=self.randomized_env,
-    #             agent_policy=agent_policy,  # replay_buffer=self.replay_buffer,
-    #             eval_episodes=self.episodes_per_instance,
-    #             max_steps=self.max_env_timesteps,
-    #             freeze_agent=self.freeze_agent, add_noise=True,
-    #             log_distances=self.log_distances)
-    #
-    #     return trajectory
 
     def sample_trajectories(self, batch_size):
         indices = np.random.randint(
