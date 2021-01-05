@@ -56,6 +56,9 @@ def parse_args():
     parser.add_argument("--test-trace-dir", type=str, default=None,
                         help='Dir to all test traces. When None, then use '
                         'the simulator generated traces.')
+    parser.add_argument( "--trace_generator_type_flag" ,type=str ,required=True, default='',
+                         choices=['MDP' ,'Random'],
+                         help='if MDP, use TraceGenerator; if Random, use RandomTraceGenertaor')
 
     # model related paths
     parser.add_argument("--summary-dir", type=str, required=True,
@@ -109,13 +112,16 @@ def main():
                 zip(traces_time, traces_bw, traces_names)):
             net_env = Environment(args.video_size_file_dir,
                                   args.train_env_config, trace_idx,
+                                  trace_generator_type_flag=args.trace_generator_type_flag,
                                   trace_time=trace_time, trace_bw=trace_bw,
                                   trace_file_name=trace_filename, fixed=False,
                                   trace_video_same_duration_flag=True)
             train_envs.append(net_env)
     else:
         train_envs = [Environment(args.video_size_file_dir,
-                                  args.train_env_config, 0, fixed=False,
+                                  args.train_env_config, 0,
+                                  trace_generator_type_flag=args.trace_generator_type_flag,
+                                  fixed=False,
                                   trace_video_same_duration_flag=True)]
 
     # prepare train dataset
@@ -127,7 +133,9 @@ def main():
                 zip(traces_time, traces_bw, traces_names)):
             net_env = Environment(args.video_size_file_dir, args.
                                   val_env_config,
-                                  trace_idx, trace_time=trace_time,
+                                  trace_idx,
+                                  trace_generator_type_flag=args.trace_generator_type_flag ,
+                                  trace_time=trace_time,
                                   trace_bw=trace_bw,
                                   trace_file_name=trace_filename, fixed=True,
                                   trace_video_same_duration_flag=True)
@@ -142,6 +150,7 @@ def main():
                 zip(traces_time, traces_bw, traces_names)):
             net_env = Environment(args.video_size_file_dir,
                                   args.test_env_config, trace_idx,
+                                  trace_generator_type_flag=args.trace_generator_type_flag ,
                                   trace_time=trace_time, trace_bw=trace_bw,
                                   trace_file_name=trace_filename, fixed=True,
                                   trace_video_same_duration_flag=True)

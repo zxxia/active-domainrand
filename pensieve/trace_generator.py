@@ -139,7 +139,7 @@ class RandomTraceGenerator(object):
         trace_bw = []
         last_val = round( np.random.uniform( self.min_throughput, self.max_throughput ) ,round_digit )
 
-        while trace_time < self.duration:
+        while ts < self.duration:
             if cnt <= 0:
                 bw_val = round( np.random.uniform( self.min_throughput, self.max_throughput ) ,round_digit )
                 cnt = np.random.randint( 1, self.T_s + 1 )

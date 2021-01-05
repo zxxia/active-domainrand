@@ -10,14 +10,14 @@ from pensieve.constants import (A_DIM, B_IN_MB, BITS_IN_BYTE,
                                 MILLISECONDS_IN_SECOND, NOISE_HIGH, NOISE_LOW,
                                 S_INFO, S_LEN, VIDEO_BIT_RATE, VIDEO_CHUNK_LEN)
 from pensieve.environment.dimension import Dimension
-from pensieve.trace_generator import TraceGenerator
+from pensieve.trace_generator import TraceGenerator, RandomTraceGenerator
 from pensieve.utils import linear_reward
 
 
 class Environment:
     """Simulated network environment for Pensieve."""
 
-    def __init__(self, video_size_file_dir, config_file, seed, trace_time=None,
+    def __init__(self, video_size_file_dir, config_file, seed, trace_generator_type_flag, trace_time=None,
                  trace_bw=None, trace_file_name=None, fixed=True,
                  trace_video_same_duration_flag=False):
         """Initialize a simulated network environment for Pensieve.
@@ -47,14 +47,25 @@ class Environment:
 
         # variables related to network trace
         if trace_time is None and trace_bw is None:
-            self.trace_generator = TraceGenerator(
-                self.dimensions['T_l'].current_value,
-                self.dimensions['T_s'].current_value,
-                self.dimensions['cov'].current_value,
-                self.dimensions['duration'].current_value,
-                self.dimensions['step'].current_value,
-                self.dimensions['min_throughput'].current_value,
-                self.dimensions['max_throughput'].current_value, seed)
+            if trace_generator_type_flag == 'MDP':
+                self.trace_generator = TraceGenerator(
+                    self.dimensions['T_l'].current_value,
+                    self.dimensions['T_s'].current_value,
+                    self.dimensions['cov'].current_value,
+                    self.dimensions['duration'].current_value,
+                    self.dimensions['step'].current_value,
+                    self.dimensions['min_throughput'].current_value,
+                    self.dimensions['max_throughput'].current_value, seed)
+            else:
+                self.trace_generator = RandomTraceGenerator(
+                    self.dimensions['T_l'].current_value ,
+                    self.dimensions['T_s'].current_value ,
+                    self.dimensions['cov'].current_value ,
+                    self.dimensions['duration'].current_value ,
+                    self.dimensions['step'].current_value ,
+                    self.dimensions['min_throughput'].current_value ,
+                    self.dimensions['max_throughput'].current_value ,seed )
+
             self.trace_time, self.trace_bw = \
                 self.trace_generator.generate_trace()
             self.trace_file_name = None
