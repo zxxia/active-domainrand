@@ -91,6 +91,11 @@ class Pensieve(BaseAgentPolicy):
         for i in range(self.num_agents):
             agents[i].join()
 
+    def select_action(self, state):
+        bit_rate, action_prob_vec = self.net.select_action(state)
+        return bit_rate, action_prob_vec
+
+
     def evaluate(self, net_env, save_dir=None):
         torch.set_num_threads(1)
         net_env.reset()
@@ -316,7 +321,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
             state, reward, end_of_video, info = net_env.step(bit_rate)
 
             bit_rate, action_prob_vec = net.select_action(state)
-            bit_rate = bit_rate[0]
+            bit_rate = bit_rate.item()
             # Note: we need to discretize the probability into 1/RAND_RANGE
             # steps, because there is an intrinsic discrepancy in passing
             # single state and batch states
