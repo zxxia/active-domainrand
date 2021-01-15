@@ -1,10 +1,12 @@
 import argparse
 import json
+from json import dumps
 import os
 import signal
 import subprocess
 import sys
 from time import sleep
+from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 from urllib.request import urlopen
 
 from pyvirtualdisplay import Display
@@ -36,12 +38,57 @@ def parse_args():
     parser.add_argument('--port', type=int, help='Port number.')
     parser.add_argument('--abr', type=str, help='ABR algorithm.')
     # parser.add_argument('--trace_file', type=str, help='Path to trace file.')
-    parser.add_argument('--run_time', type=int, default=320,
+    parser.add_argument('--run_time', type=int, default=240,
                         help="Running time.")
     parser.add_argument('--sleep_time', type=int,
                         default=2, help="Sleep time.")
 
     return parser.parse_args()
+
+
+def add_url_params(url, params):
+    """Add GET params to provided URL being aware of existing.
+
+    url = 'http://stackoverflow.com/test?answers=true'
+    new_params = {'answers': False, 'data': ['some','values']}
+    add_url_params(url, new_params)
+    'http://stackoverflow.com/test?data=some&data=values&answers=false'
+
+    Args
+        url: string of target URL
+        params: dict containing requested params to be added
+
+    Return
+        string with updated URL
+    """
+    # Unquoting URL first so we don't loose existing args
+    url = unquote(url)
+    # Extracting url info
+    parsed_url = urlparse(url)
+    # Extracting URL arguments from parsed URL
+    get_args = parsed_url.query
+    # Converting URL arguments to dict
+    parsed_get_args = dict(parse_qsl(get_args))
+    # Merging URL arguments dict with new params
+    parsed_get_args.update(params)
+
+    # Bool and Dict values should be converted to json-friendly values
+    # you may throw this part away if you don't like it :)
+    parsed_get_args.update(
+        {k: dumps(v) for k, v in parsed_get_args.items()
+         if isinstance(v, (bool, dict))}
+    )
+
+    # Converting URL argument to proper query string
+    encoded_get_args = urlencode(parsed_get_args, doseq=True)
+    # Creating new parsed result object based on provided with new
+    # URL arguments. Same thing happens inside of urlparse.
+    new_url = ParseResult(
+        parsed_url.scheme, parsed_url.netloc, parsed_url.path,
+        parsed_url.params, encoded_get_args, parsed_url.fragment
+    ).geturl()
+
+    return new_url
 
 
 def timeout_handler(signum, frame):
@@ -65,7 +112,7 @@ def main():
     url = 'http://{}:{}/myindex_{}.html'.format(ip, port_number, abr_algo)
     # ip = json.loads(urlopen("http://ip.jsontest.com/").read().decode('utf-8'))['ip']
     # url = 'http://{}/myindex_{}.html'.format(ip, abr_algo)
-    print(url)
+    print('Open', url)
 
     # timeout signal
     signal.signal(signal.SIGALRM, timeout_handler)
@@ -74,25 +121,12 @@ def main():
     driver = None
     try:
         # copy over the chrome user dir
-        default_chrome_user_dir = '../abr_browser_dir/chrome_data_dir'
+        default_chrome_user_dir = './abr_browser_dir/chrome_data_dir'
         # chrome_user_dir = '/tmp/chrome_user_dir_id_' + process_id
         chrome_user_dir = '/tmp/chrome_user_dir_id'  # + process_id
         os.system('rm -r ' + chrome_user_dir)
         os.system('cp -r ' + default_chrome_user_dir + ' ' + chrome_user_dir)
 
-        # start abr algorithm server
-        # if abr_algo == 'RL':
-        #     command = 'exec /usr/bin/python ../rl_server/rl_server_no_training.py ' + trace_file
-        # elif abr_algo == 'fastMPC':
-        #     command = 'exec /usr/bin/python ../rl_server/mpc_server.py ' + trace_file
-        # elif abr_algo == 'robustMPC':
-        #     command = 'exec /usr/bin/python ../rl_server/robust_mpc_server.py ' + trace_file
-        # else:
-        #     command = 'exec /usr/bin/python ../rl_server/simple_server.py ' + \
-        #         abr_algo + ' ' + trace_file
-        #
-        # proc = subprocess.Popen(command, stdout=subprocess.PIPE,
-        #                         stderr=subprocess.PIPE, shell=True)
         sleep(2)
 
         # to not display the page in browser
@@ -101,23 +135,20 @@ def main():
 
         # initialize chrome driver
         options = Options()
-        chrome_driver = '../abr_browser_dir/chromedriver'
+        chrome_driver = './abr_browser_dir/chromedriver'
         options.add_argument('--user-data-dir=' + chrome_user_dir)
         options.add_argument('--ignore-certificate-errors')
-        driver = webdriver.Chrome(chrome_driver, chrome_options=options)
+
+        driver = webdriver.Chrome(chrome_driver, options=options)
 
         # run chrome
-        driver.set_page_load_timeout(10)
+        driver.set_page_load_timeout(5)
         driver.get(url)
 
         print()
         sleep(run_time)
         driver.quit()
         display.stop()
-
-        # kill abr algorithm server
-        # proc.send_signal(signal.SIGINT)
-        # proc.kill()
 
         print('done')
 
@@ -135,4 +166,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('Keyboard Interrupted! Virtual browser exits!')

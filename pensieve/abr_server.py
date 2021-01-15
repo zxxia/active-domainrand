@@ -35,11 +35,12 @@ def parse_args():
     parser.add_argument('--abr', type=str, required=True,
                         choices=['RobustMPC', 'RL'],
                         help='ABR algorithm.')
-    parser.add_argument('--nn_model', type=str, default=None,
+    parser.add_argument('--actor-path', type=str, default=None,
                         help='Path to RL model.')
     # data io related
-    parser.add_argument('--save_dir', type=str, help='directory to save logs.')
-    parser.add_argument('--trace_file', type=str, help='Path to trace file.')
+    parser.add_argument('--summary-dir', type=str,
+                        help='directory to save logs.')
+    parser.add_argument('--trace-file', type=str, help='Path to trace file.')
     parser.add_argument("--video-size-file-dir", type=str, required=True,
                         help='Dir to video size files')
 
@@ -52,23 +53,15 @@ def parse_args():
     return parser.parse_args()
 
 
-def make_request_handler(abr, log_file_path, video_size):
+def make_request_handler(server_states):
     """Instantiate HTTP request handler."""
 
     class Request_Handler(BaseHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
-            self.log_writer = csv.writer(open(log_file_path, 'w', 1),
-                                         delimiter='\t',
-                                         lineterminator='\n')
-            self.log_writer.writerow(
-                ['wall_time', 'bit_rate', 'buffer_size', 'rebuffer_time',
-                 'video_chunk_size', 'download_time', 'reward'])
-            self.abr = abr
-            self.video_chunk_count = 0
-            self.last_total_rebuf = 0
-            self.last_bit_rate = DEFAULT_QUALITY
-            self.state = np.zeros((1, S_INFO, S_LEN))
-            self.video_size = video_size
+            self.server_states = server_states
+            self.abr = server_states['abr']
+            self.video_size = server_states['video_size']
+            self.log_writer = server_states['log_writer']
 
             BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
 
@@ -76,6 +69,8 @@ def make_request_handler(abr, log_file_path, video_size):
             content_length = int(self.headers['Content-Length'])
             post_data = json.loads(self.rfile.read(
                 content_length).decode('utf-8'))
+            print(self.server_states['video_chunk_count'],
+                  self.server_states['last_bit_rate'])
             print(post_data)
 
             if ('pastThroughput' in post_data):
@@ -99,71 +94,93 @@ def make_request_handler(abr, log_file_path, video_size):
 
                 # option 4. use the metric in SIGCOMM MPC paper
                 rebuffer_time = float(
-                    post_data['RebufferTime'] - self.last_total_rebuf)
+                    post_data['RebufferTime'] -
+                    self.server_states['last_total_rebuf'])
 
                 # --linear reward--
                 reward = linear_reward(
                     VIDEO_BIT_RATE[post_data['lastquality']],
-                    VIDEO_BIT_RATE[self.last_bit_rate], rebuffer_time)
+                    VIDEO_BIT_RATE[self.server_states['last_bit_rate']],
+                    rebuffer_time)
                 # VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
                 #     - REBUF_PENALTY * rebuffer_time / M_IN_K \
                 #     - SMOOTH_PENALTY * np.abs(
                 #     VIDEO_BIT_RATE[post_data['lastquality']] -
                 #     self.last_bit_rate) / M_IN_K
 
-                self.last_bit_rate = post_data['lastquality']
-                self.last_total_rebuf = post_data['RebufferTime']
+                self.server_states['last_bit_rate'] = post_data['lastquality']
+                self.server_states['last_total_rebuf'] = post_data['RebufferTime']
 
                 # compute bandwidth measurement
                 video_chunk_fetch_time = post_data['lastChunkFinishTime'] - \
                     post_data['lastChunkStartTime']
+                print('video chunk fetch time:', video_chunk_fetch_time)
                 video_chunk_size = post_data['lastChunkSize']
 
                 # compute number of video chunks left
                 video_chunk_remain = TOTAL_VIDEO_CHUNK - \
-                    self.video_chunk_count
-                self.video_chunk_count += 1
-
-                # dequeue history record
-                self.state = np.roll(self.state, -1, -1)
+                    self.server_states['video_chunk_count']
+                self.server_states['video_chunk_count'] += 1
 
                 next_video_chunk_sizes = []
                 for i in range(A_DIM):
-                    next_video_chunk_sizes.append(
-                        self.video_size[i][self.video_chunk_count])
+                    if 0 <= self.server_states['video_chunk_count'] <= TOTAL_VIDEO_CHUNK:
+                        next_video_chunk_sizes.append(
+                            self.video_size[i][self.server_states['video_chunk_count']])
+                    else:
+                        next_video_chunk_sizes.append(0)
 
                 # this should be S_INFO number of terms
-                # try:
-                self.state[0, 0, -1] = VIDEO_BIT_RATE[post_data['lastquality']
-                                                      ] / max(VIDEO_BIT_RATE)
-                self.state[0, 1, -1] = post_data['buffer'] / BUFFER_NORM_FACTOR
-                # kilo byte / ms
-                self.state[0, 2, -1] = float(video_chunk_size) / \
-                    float(video_chunk_fetch_time) / M_IN_K
-                self.state[0, 3, -1] = float(video_chunk_fetch_time) / \
-                    M_IN_K / BUFFER_NORM_FACTOR  # 10 sec
-                self.state[0, 4, :A_DIM] = np.array(
-                    next_video_chunk_sizes) / M_IN_K / M_IN_K  # mega byte
-                self.state[0, 5, -1] = min(
-                    video_chunk_remain, TOTAL_VIDEO_CHUNK) / TOTAL_VIDEO_CHUNK
-                # except ZeroDivisionError:
-                #     # this should occur VERY rarely (1 out of 3000), should be
-                #     # a dash issue in this case we ignore the observation and
-                #     # roll back to an eariler one
-                #     if len(self.s_batch) == 0:
-                #         state = [np.zeros((S_INFO, S_LEN))]
-                #     else:
-                #         state = np.array(self.s_batch[-1], copy=True)
+                try:
+                    state0 = VIDEO_BIT_RATE[post_data['lastquality']
+                                            ] / max(VIDEO_BIT_RATE)
+                    state1 = post_data['buffer'] / BUFFER_NORM_FACTOR
+                    # kilo byte / ms
+                    state2 = video_chunk_size / video_chunk_fetch_time / M_IN_K
+                    state3 = video_chunk_fetch_time / M_IN_K / BUFFER_NORM_FACTOR  # 10 sec
 
-                # log wall_time, bit_rate, buffer_size, rebuffer_time,
-                # video_chunk_size, download_time, reward
+                    # mega byte
+                    state4 = np.array(next_video_chunk_sizes) / M_IN_K / M_IN_K
+                    state5 = min(video_chunk_remain,
+                                 TOTAL_VIDEO_CHUNK) / TOTAL_VIDEO_CHUNK
+                    # dequeue history record
+                    self.server_states['state'] = np.roll(
+                        self.server_states['state'], -1, -1)
+                    self.server_states['state'][0, 0, -1] = state0
+                    self.server_states['state'][0, 1, -1] = state1
+                    self.server_states['state'][0, 2, -1] = state2
+                    self.server_states['state'][0, 3, -1] = state3
+                    self.server_states['state'][0, 4, :A_DIM] = state4
+                    self.server_states['state'][0, 5, -1] = state5
+
+                except ZeroDivisionError:
+                    # this should occur VERY rarely (1 out of 3000), should be
+                    # a dash issue in this case we ignore the observation and
+                    # roll back to an eariler one
+                    pass
+
+                    # log wall_time, bit_rate, buffer_size, rebuffer_time,
+                    # video_chunk_size, download_time, reward
                 self.log_writer.writerow(
                     [time.time(), VIDEO_BIT_RATE[post_data['lastquality']],
                      post_data['buffer'], rebuffer_time / M_IN_K,
                      video_chunk_size, video_chunk_fetch_time, reward])
-
-                bit_rate, _ = self.abr.select_action(self.state)
-                bit_rate = bit_rate.item()
+                if isinstance(self.abr, Pensieve):
+                    bit_rate, _ = self.abr.select_action(
+                        self.server_states['state'])
+                    bit_rate = bit_rate.item()
+                elif isinstance(self.abr, RobustMPC):
+                    last_index = int(post_data['lastRequest'])
+                    future_chunk_cnt = min(self.abr.mpc_future_chunk_cnt,
+                                           TOTAL_VIDEO_CHUNK - last_index - 1)
+                    bit_rate, _ = self.abr.select_action(
+                        self.server_states['state'], last_index,
+                        future_chunk_cnt,
+                        np.array([self.video_size[i]
+                                  for i in sorted(self.video_size)]),
+                        post_data['lastquality'], post_data['buffer'])
+                else:
+                    raise TypeError("Unsupported ABR type.")
                 # action_prob = self.actor.predict(
                 #     np.reshape(state, (1, S_INFO, S_LEN)))
                 # action_cumsum = np.cumsum(action_prob)
@@ -178,12 +195,12 @@ def make_request_handler(abr, log_file_path, video_size):
 
                 end_of_video = post_data['lastRequest'] == TOTAL_VIDEO_CHUNK
                 if end_of_video:
-                    send_data = "REFRESH"
-                    send_data = "STOP"
-                    self.last_total_rebuf = 0
-                    self.last_bit_rate = DEFAULT_QUALITY
-                    self.video_chunk_count = 0
-                    self.state = np.zeros((1, S_INFO, S_LEN))
+                    # send_data = "REFRESH"
+                    send_data = "stop"  # TODO: do not refresh the webpage and wait for timeout
+                    self.server_states['last_total_rebuf'] = 0
+                    self.server_states['last_bit_rate'] = DEFAULT_QUALITY
+                    self.server_states['video_chunk_count'] = 0
+                    self.server_states['state'] = np.zeros((1, S_INFO, S_LEN))
                     # so that in the log we know where video ends
                     # self.log_writer.writerow('\n')
 
@@ -208,38 +225,50 @@ def make_request_handler(abr, log_file_path, video_size):
             self.end_headers()
             self.wfile.write(b"console.log('here');")
 
-        def log_message(self, format, *args):
-            return
+        # def log_message(self, format, *args):
+        #     return
 
     return Request_Handler
 
 
-def main():
-    args = parse_args()
-    if not os.path.exists(args.summary_dir):
-        os.makedirs(args.summary_dir)
+def run_abr_server(abr, trace_file, summary_dir, actor_path,
+                   video_size_file_dir, ip, port):
 
     log_file_path = os.path.join(
-        args.save_dir, 'log_RL_{}'.format(os.path.basename(args.trace_file)))
+        summary_dir, 'log_RL_{}'.format(os.path.basename(trace_file)))
 
-    ip = args.ip
-    port = args.port
-
-    if args.abr == 'RobustMPC':
+    if abr == 'RobustMPC':
         abr = RobustMPC()
-    elif args.abr == 'RL':
-        assert args.nn_model is not None, "nn_model is needed for RL abr."
-        abr = Pensieve(16, args.summary_dir, actor_path=args.nn_model)
+    elif abr == 'RL':
+        assert actor_path is not None, "actor-path is needed for RL abr."
+        abr = Pensieve(16, summary_dir, actor_path=actor_path)
     else:
-        raise ValueError("ABR {} is not supported!".format(args.abr))
+        raise ValueError("ABR {} is not supported!".format(abr))
 
-    video_size = construct_bitrate_chunksize_map(args.video_size_file_dir)
+    video_size = construct_bitrate_chunksize_map(video_size_file_dir)
     np.random.seed(RANDOM_SEED)
 
     assert len(VIDEO_BIT_RATE) == A_DIM
 
     # interface to abr_rl server
-    handler_class = make_request_handler(abr, log_file_path, video_size)
+
+    log_writer = csv.writer(open(log_file_path, 'w', 1), delimiter='\t',
+                            lineterminator='\n')
+    log_writer.writerow(
+        ['timestamp', 'bit_rate', 'buffer_size', 'rebuffer_time',
+         'video_chunk_size', 'download_time', 'reward'])
+
+    # variables and states needed to track among requests
+    server_states = {
+        'log_writer': log_writer,
+        'abr': abr,
+        'video_size': video_size,
+        'video_chunk_count': 0,
+        "last_total_rebuf": 0,
+        'last_bit_rate': DEFAULT_QUALITY,
+        'state': np.zeros((1, S_INFO, S_LEN))
+    }
+    handler_class = make_request_handler(server_states)
 
     server_address = (ip, port)
     httpd = HTTPServer(server_address, handler_class)
@@ -247,11 +276,19 @@ def main():
     httpd.serve_forever()
 
 
+def main():
+    args = parse_args()
+    os.makedirs(args.summary_dir, exist_ok=True)
+    run_abr_server(args.abr, args.trace_file, args.summary_dir,
+                   args.actor_path, args.video_size_file_dir, args.ip,
+                   args.port)
+
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("Keyboard interrupted.")
+        print("Capture Keyboard interrupted.")
         try:
             sys.exit(0)
         except SystemExit:
