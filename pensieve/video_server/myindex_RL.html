@@ -12,12 +12,12 @@
     <script src="dash.all.min.js"></script>
     <script>
         (function () {
-            // var url_string = "http://www.example.com/t.html?a=1&b=3&c=m2-m3-m4-m5"; //window.location.href
             var url_string = window.location.href;
-            console.log(url_string)
             var url = new URL(url_string);
-            var buffer_threshold = url.searchParams.get("c");
-            console.log(c);
+            var buffer_threshold = url.searchParams.get("buffer_threshold");
+            var abr_id = url.searchParams.get("abr_id");
+
+            console.log(buffer_threshold);
             var manifest_url = "/Manifest.mpd";
             var player = dashjs.MediaPlayer().create()
 
@@ -30,7 +30,6 @@
                 5: 'Festive',
                 6: 'Bola'
             };
-            var abr_id = 4;
 
             if (abr_id > 1 && abr_id != 6) {
                 player.enablerlABR(true);
