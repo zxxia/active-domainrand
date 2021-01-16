@@ -69,8 +69,8 @@ def make_request_handler(server_states):
             content_length = int(self.headers['Content-Length'])
             post_data = json.loads(self.rfile.read(
                 content_length).decode('utf-8'))
-            print(self.server_states['video_chunk_count'],
-                  self.server_states['last_bit_rate'])
+            # print(self.server_states['video_chunk_count'],
+            #       self.server_states['last_bit_rate'])
             print(post_data)
 
             if ('pastThroughput' in post_data):
@@ -114,7 +114,7 @@ def make_request_handler(server_states):
                 # compute bandwidth measurement
                 video_chunk_fetch_time = post_data['lastChunkFinishTime'] - \
                     post_data['lastChunkStartTime']
-                print('video chunk fetch time:', video_chunk_fetch_time)
+                # print('video chunk fetch time:', video_chunk_fetch_time)
                 video_chunk_size = post_data['lastChunkSize']
 
                 # compute number of video chunks left
@@ -179,6 +179,8 @@ def make_request_handler(server_states):
                         np.array([self.video_size[i]
                                   for i in sorted(self.video_size)]),
                         post_data['lastquality'], post_data['buffer'])
+                    # print(self.server_states['state'], last_index,
+                    #       future_chunk_cnt, bit_rate)
                 else:
                     raise TypeError("Unsupported ABR type.")
                 # action_prob = self.actor.predict(
@@ -235,7 +237,7 @@ def run_abr_server(abr, trace_file, summary_dir, actor_path,
                    video_size_file_dir, ip, port):
 
     log_file_path = os.path.join(
-        summary_dir, 'log_RL_{}'.format(os.path.basename(trace_file)))
+        summary_dir, 'log_{}_{}'.format(abr, os.path.basename(trace_file)))
 
     if abr == 'RobustMPC':
         abr = RobustMPC()
