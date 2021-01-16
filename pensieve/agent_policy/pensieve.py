@@ -95,7 +95,6 @@ class Pensieve(BaseAgentPolicy):
         bit_rate, action_prob_vec = self.net.select_action(state)
         return bit_rate, action_prob_vec
 
-
     def evaluate(self, net_env, save_dir=None):
         torch.set_num_threads(1)
         net_env.reset()
@@ -236,8 +235,9 @@ class Pensieve(BaseAgentPolicy):
                 # tmp_save_dir = os.path.join(self.log_dir, 'test_results')
                 if val_envs is not None:
                     val_results = self.evaluate_envs(val_envs)
-                    vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
-                                   for vid_results in val_results]
+                    vid_rewards = np.array(
+                        [np.sum(np.array(vid_results)[1:, -1])
+                         for vid_results in val_results])
                     val_log_writer.writerow([self.epoch + 1,
                                              np.min(vid_rewards),
                                              np.percentile(vid_rewards, 5),
@@ -247,8 +247,9 @@ class Pensieve(BaseAgentPolicy):
                                              np.max(vid_rewards)])
                 if test_envs is not None:
                     test_results = self.evaluate_envs(test_envs)
-                    vid_rewards = [np.sum(np.array(vid_results)[1:, -1])
-                                   for vid_results in test_results]
+                    vid_rewards = np.array(
+                        [np.sum(np.array(vid_results)[1:, -1])
+                         for vid_results in test_results])
                     test_log_writer.writerow([self.epoch + 1,
                                               np.min(vid_rewards),
                                               np.percentile(vid_rewards, 5),
@@ -359,7 +360,8 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 #                      info['buffer_size'], info['rebuf'],
                 #                      info['video_chunk_size'], info['delay'],
                 # net_env.nb_chunk_sent,
-                csv_writer.writerow([epoch, np.mean(video_chunk_rewards),
+                csv_writer.writerow([epoch,
+                                     np.mean(np.array(video_chunk_rewards)),
                                      net_env.trace_file_name,
                                      env_params['video_chunk_length'],
                                      env_params['buffer_threshold'],
