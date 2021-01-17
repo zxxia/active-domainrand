@@ -1,21 +1,18 @@
 import argparse
-import json
 from json import dumps
 import multiprocessing as mp
 import os
 import signal
-import subprocess
-import sys
 from time import sleep
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
-from urllib.request import urlopen
+# from urllib.request import urlopen
 
 from pyvirtualdisplay import Display
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+# from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver.common.action_chains import ActionChains
+# from selenium.webdriver.common.keys import Keys
 
 from pensieve.virtual_browser.abr_server import run_abr_server
 
@@ -45,9 +42,10 @@ def parse_args():
                         help='Path to RL model.')
 
     # data io related
-    parser.add_argument('--summary-dir', type=str,
+    parser.add_argument('--summary-dir', type=str, required=True,
                         help='directory to save logs.')
-    parser.add_argument('--trace-file', type=str, help='Path to trace file.')
+    parser.add_argument('--trace-file', type=str, required=True,
+                        help='Path to trace file.')
     parser.add_argument("--video-size-file-dir", type=str, required=True,
                         help='Dir to video size files')
     parser.add_argument('--run_time', type=int, default=240,
@@ -116,12 +114,14 @@ def main():
     port_number = args.port
     abr_algo = args.abr
     run_time = args.run_time
-    # process_id = sys.argv[4]
-    # trace_file = args.trace_file
-    sleep_time = args.sleep_time
 
     # TODO: start abr server here
     # prevent multiple process from being synchronized
+    abr_server_proc = mp.Process(target=run_abr_server, args=(
+        abr_algo, args.trace_file, args.summary_dir, args.actor_path,
+        args.video_size_file_dir))
+    abr_server_proc.start()
+
     sleep(3)
 
     # generate url
@@ -137,11 +137,13 @@ def main():
     driver = None
     try:
         # copy over the chrome user dir
-        default_chrome_user_dir = './abr_browser_dir/chrome_data_dir'
+        # default_chrome_user_dir = os.path.join(
+        #     os.path.dirname(os.path.abspath(__file__)),
+        #     'abr_browser_dir/chrome_data_dir')
         # chrome_user_dir = '/tmp/chrome_user_dir_id_' + process_id
-        chrome_user_dir = '/tmp/chrome_user_dir_id'  # + process_id
-        os.system('rm -r ' + chrome_user_dir)
-        os.system('cp -r ' + default_chrome_user_dir + ' ' + chrome_user_dir)
+        # chrome_user_dir = '/tmp/chrome_user_dir_id'  # + process_id
+        # os.system('rm -r ' + chrome_user_dir)
+        # os.system('cp -r ' + default_chrome_user_dir + ' ' + chrome_user_dir)
 
         # to not display the page in browser
         display = Display(visible=False, size=(800, 600))
@@ -149,8 +151,10 @@ def main():
 
         # initialize chrome driver
         options = Options()
-        chrome_driver = './abr_browser_dir/chromedriver'
-        options.add_argument('--user-data-dir=' + chrome_user_dir)
+        chrome_driver = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'abr_browser_dir/chromedriver')
+        # options.add_argument('--user-data-dir=' + chrome_user_dir)
         options.add_argument('--ignore-certificate-errors')
 
         driver = webdriver.Chrome(chrome_driver, options=options)
@@ -159,7 +163,6 @@ def main():
         driver.set_page_load_timeout(5)
         driver.get(url)
 
-        print()
         sleep(run_time)
         driver.quit()
         display.stop()
@@ -175,8 +178,8 @@ def main():
         #     proc.send_signal(signal.SIGINT)
         # except:
         #     pass
-
         print(e)
+    abr_server_proc.terminate()
 
 
 if __name__ == '__main__':

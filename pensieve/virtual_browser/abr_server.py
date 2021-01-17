@@ -234,7 +234,7 @@ def make_request_handler(server_states):
 
 
 def run_abr_server(abr, trace_file, summary_dir, actor_path,
-                   video_size_file_dir, ip, port):
+                   video_size_file_dir, ip='localhost', port=8333):
 
     log_file_path = os.path.join(
         summary_dir, 'log_{}_{}'.format(abr, os.path.basename(trace_file)))
