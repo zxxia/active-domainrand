@@ -14,8 +14,8 @@
         (function () {
             var url_string = window.location.href;
             var url = new URL(url_string);
-            var buffer_threshold = url.searchParams.get("buffer_threshold");
-            var abr_id = url.searchParams.get("abr_id");
+            var buffer_threshold = parseInt(url.searchParams.get("buffer_threshold"));
+            var abr_id = parseInt(url.searchParams.get("abr_id"));
 
             console.log(buffer_threshold);
             var manifest_url = "/Manifest.mpd";

@@ -27,6 +27,17 @@ from pensieve.virtual_browser.abr_server import run_abr_server
 # the default location for firefox is /usr/bin/firefox and chrome binary is /usr/bin/google-chrome
 # if they are at those locations, don't need to specify
 
+ABR_ID_MAP = {
+    'Default': 0,
+    'FixedRate': 1,
+    'BufferBased': 2,
+    'RateBased': 3,
+    'RL': 4,
+    'RobustMPC': 4,
+    'Festive': 5,
+    'Bola': 6
+}
+
 
 def parse_args():
     """Parse arguments from the command line."""
@@ -36,8 +47,9 @@ def parse_args():
 
     # ABR related
     parser.add_argument('--abr', type=str, required=True,
-                        choices=['RobustMPC', 'RL'],
-                        help='ABR algorithm.')
+                        choices=['RobustMPC', 'RL', 'Default', 'FixedRate',
+                                 'BufferBased', 'RateBased', 'Festive',
+                                 'Bola'], help='ABR algorithm.')
     parser.add_argument('--actor-path', type=str, default=None,
                         help='Path to RL model.')
 
@@ -125,7 +137,10 @@ def main():
     sleep(3)
 
     # generate url
-    url = 'http://{}:{}/myindex_{}.html'.format(ip, port_number, abr_algo)
+    url = 'http://{}:{}/index.html'.format(ip, port_number)
+    url_params = {'abr_id': ABR_ID_MAP[abr_algo]}
+    url = add_url_params(url, url_params)
+
     # ip = json.loads(urlopen("http://ip.jsontest.com/").read().decode('utf-8'))['ip']
     # url = 'http://{}/myindex_{}.html'.format(ip, abr_algo)
     print('Open', url)
