@@ -15,13 +15,25 @@
             var url_string = window.location.href;
             var url = new URL(url_string);
             var buffer_threshold = parseInt(url.searchParams.get("buffer_threshold"));
-            var abr_id = parseInt(url.searchParams.get("abr_id"));
+            // var abr_id = parseInt(url.searchParams.get("abr_id"));
+            var abr = url.searchParams.get("abr_id");
 
             console.log(buffer_threshold);
             var manifest_url = "/Manifest.mpd";
             var player = dashjs.MediaPlayer().create()
 
-            var abr_algorithms = {
+            var abr_id_map = {
+                'Default': 0,
+                'FixedRate': 1,
+                'BufferBased': 2,
+                'RateBased': 3,
+                'RL': 4,
+                'RobustMPC': 4,
+                'Festive': 5,
+                'Bola': 6
+            };
+            var abr_id = abr_id_map[abr];
+            /*var abr_algorithms = {
                 0: 'Default',
                 1: 'Fixed Rate (0)',
                 2: 'Buffer Based',
@@ -29,7 +41,7 @@
                 4: 'RL',
                 5: 'Festive',
                 6: 'Bola'
-            };
+            };*/
 
             if (abr_id > 1 && abr_id != 6) {
                 player.enablerlABR(true);
@@ -49,8 +61,10 @@
             }
             player.setAbrAlgorithm(abr_id);
 
-            if (abr_id in abr_algorithms) {
-                document.title = abr_algorithms[abr_id];
+            //if (abr_id in abr_algorithms) {
+            if (abr in abr_id_map) {
+                //document.title = abr_algorithms[abr_id];
+                document.title = abr;
             } else {
                 document.title = "Unknown ABR Algorithm";
             }

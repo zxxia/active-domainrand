@@ -27,16 +27,16 @@ from pensieve.virtual_browser.abr_server import run_abr_server
 # the default location for firefox is /usr/bin/firefox and chrome binary is /usr/bin/google-chrome
 # if they are at those locations, don't need to specify
 
-ABR_ID_MAP = {
-    'Default': 0,
-    'FixedRate': 1,
-    'BufferBased': 2,
-    'RateBased': 3,
-    'RL': 4,
-    'RobustMPC': 4,
-    'Festive': 5,
-    'Bola': 6
-}
+# ABR_ID_MAP = {
+#     'Default': 0,
+#     'FixedRate': 1,
+#     'BufferBased': 2,
+#     'RateBased': 3,
+#     'RL': 4,
+#     'RobustMPC': 4,
+#     'Festive': 5,
+#     'Bola': 6
+# }
 
 
 def parse_args():
@@ -138,7 +138,8 @@ def main():
 
     # generate url
     url = 'http://{}:{}/index.html'.format(ip, port_number)
-    url_params = {'abr_id': ABR_ID_MAP[abr_algo]}
+    # url_params = {'abr_id': ABR_ID_MAP[abr_algo]}
+    url_params = {'abr_id': abr_algo}
     url = add_url_params(url, url_params)
 
     # ip = json.loads(urlopen("http://ip.jsontest.com/").read().decode('utf-8'))['ip']
