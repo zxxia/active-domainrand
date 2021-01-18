@@ -236,6 +236,7 @@ def make_request_handler(server_states):
 def run_abr_server(abr, trace_file, summary_dir, actor_path,
                    video_size_file_dir, ip='localhost', port=8333):
 
+    os.makedirs(summary_dir, exist_ok=True)
     log_file_path = os.path.join(
         summary_dir, 'log_{}_{}'.format(abr, os.path.basename(trace_file)))
 
@@ -280,7 +281,6 @@ def run_abr_server(abr, trace_file, summary_dir, actor_path,
 
 def main():
     args = parse_args()
-    os.makedirs(args.summary_dir, exist_ok=True)
     run_abr_server(args.abr, args.trace_file, args.summary_dir,
                    args.actor_path, args.video_size_file_dir, args.ip,
                    args.port)
