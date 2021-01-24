@@ -5,14 +5,11 @@ import os
 import signal
 from time import sleep
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
-# from urllib.request import urlopen
 
 from pyvirtualdisplay import Display
 from selenium import webdriver
-# from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.options import Options
-# from selenium.webdriver.common.action_chains import ActionChains
-# from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 from pensieve.virtual_browser.abr_server import run_abr_server
 
@@ -67,6 +64,9 @@ def parse_args():
     parser.add_argument('--ip', type=str, help='IP of HTTP video server.')
     parser.add_argument('--port', type=int,
                         help='Port number of HTTP video server.')
+
+    parser.add_argument('--buffer-threshold', type=int, default=60,
+            help='Buffer threshold of Dash.js MediaPlayer. Unit: Second.')
 
     return parser.parse_args()
 
@@ -127,7 +127,7 @@ def main():
     abr_algo = args.abr
     run_time = args.run_time
 
-    # TODO: start abr server here
+    # start abr server here
     # prevent multiple process from being synchronized
     abr_server_proc = mp.Process(target=run_abr_server, args=(
         abr_algo, args.trace_file, args.summary_dir, args.actor_path,
@@ -139,7 +139,7 @@ def main():
     # generate url
     url = 'http://{}:{}/index.html'.format(ip, port_number)
     # url_params = {'abr_id': ABR_ID_MAP[abr_algo]}
-    url_params = {'abr_id': abr_algo}
+    url_params = {'abr_id': abr_algo, 'buffer_threshold': args.buffer_threshold}
     url = add_url_params(url, url_params)
 
     # ip = json.loads(urlopen("http://ip.jsontest.com/").read().decode('utf-8'))['ip']
@@ -153,13 +153,13 @@ def main():
     driver = None
     try:
         # copy over the chrome user dir
-        # default_chrome_user_dir = os.path.join(
-        #     os.path.dirname(os.path.abspath(__file__)),
-        #     'abr_browser_dir/chrome_data_dir')
+        default_chrome_user_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'abr_browser_dir/chrome_data_dir')
         # chrome_user_dir = '/tmp/chrome_user_dir_id_' + process_id
-        # chrome_user_dir = '/tmp/chrome_user_dir_id'  # + process_id
-        # os.system('rm -r ' + chrome_user_dir)
-        # os.system('cp -r ' + default_chrome_user_dir + ' ' + chrome_user_dir)
+        chrome_user_dir = '/tmp/chrome_user_dir'  # + process_id
+        os.system('rm -r ' + chrome_user_dir)
+        os.system('cp -r ' + default_chrome_user_dir + ' ' + chrome_user_dir)
 
         # to not display the page in browser
         display = Display(visible=False, size=(800, 600))
@@ -170,13 +170,19 @@ def main():
         chrome_driver = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             'abr_browser_dir/chromedriver')
-        # options.add_argument('--user-data-dir=' + chrome_user_dir)
+        options.add_argument('--user-data-dir=' + chrome_user_dir)
+        # enable browser logging
+        options.add_argument("--headless")
+        options.add_argument("--disable-extensions")
         options.add_argument('--ignore-certificate-errors')
+        desired_caps = DesiredCapabilities.CHROME
+        desired_caps['goog:loggingPrefs'] = {'browser': 'ALL'}
 
-        driver = webdriver.Chrome(chrome_driver, options=options)
+        driver = webdriver.Chrome(chrome_driver, options=options,
+                                  desired_capabilities=desired_caps)
 
         # run chrome
-        driver.set_page_load_timeout(5)
+        driver.set_page_load_timeout(300)
         driver.get(url)
 
         sleep(run_time)

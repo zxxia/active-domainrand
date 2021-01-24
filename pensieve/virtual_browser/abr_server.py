@@ -71,7 +71,29 @@ def make_request_handler(server_states):
                 content_length).decode('utf-8'))
             # print(self.server_states['video_chunk_count'],
             #       self.server_states['last_bit_rate'])
-            print(post_data)
+            print("\tlastRequest: {}\n\tlastquality: {}\n\t"
+                  "lastChunkStartTime: {}\n\tlastChunkEndTime: {}\n\t"
+                  "lastChunkSize: {}\n\tRebufferTime: {}s\n\tbuffer: {}s\n\t"
+                  "bufferAdjusted: {}\n\tbandwidthEst: {}\n\t"
+                  "nextChunkSize: {}".format(
+                      post_data['lastRequest'],
+                      post_data['lastquality'],
+                      post_data['lastChunkStartTime'],
+                      post_data['lastChunkFinishTime'],
+                      post_data['lastChunkSize'],
+                      post_data['RebufferTime'],
+                      post_data['buffer'],
+                      post_data['bufferAdjusted'],
+                      post_data['bandwidthEst'],
+                      post_data['nextChunkSize'],
+                  ))
+            # {'nextChunkSize': [2059512, 1358801, 885714, 581493, 372963,
+            # 150616], 'lastquality': 5, 'buffer': 4.793656999999996,
+            # 'bufferAdjusted': 0.24365699999999535, 'bandwidthEst':
+            # 13319.003002506452, 'lastRequest': 16, 'RebufferTime': 752,
+            # 'lastChunkFinishTime': 1611459172006, 'lastChunkStartTime':
+            # 1611459170508, 'lastChunkSize': 2289689}
+            # print(post_data)
 
             if ('pastThroughput' in post_data):
                 # @Hongzi: this is just the summary of throughput/quality at

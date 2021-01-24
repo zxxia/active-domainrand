@@ -14,9 +14,17 @@
         (function () {
             var url_string = window.location.href;
             var url = new URL(url_string);
-            var buffer_threshold = parseInt(url.searchParams.get("buffer_threshold"));
+            var buffer_threshold = url.searchParams.get("buffer_threshold");
+            if (buffer_threshold == null) {
+                buffer_threshold = 60;
+            } else {
+                buffer_threshold = parseInt(buffer_threshold);
+            }
             // var abr_id = parseInt(url.searchParams.get("abr_id"));
             var abr = url.searchParams.get("abr_id");
+            if (abr == null) {
+                abr = 'Default';
+            }
 
             console.log(buffer_threshold);
             var manifest_url = "/Manifest.mpd";
@@ -49,10 +57,10 @@
 
             // uncomment this block if you want to change the buffer size that
             // dash tries to maintain
-            player.setBufferTimeAtTopQuality(60);
-            player.setStableBufferTime(60);
-            player.setBufferToKeep(60);
-            player.setBufferPruningInterval(60);
+            player.setBufferTimeAtTopQuality(buffer_threshold);
+            player.setStableBufferTime(buffer_threshold);
+            player.setBufferToKeep(buffer_threshold);
+            player.setBufferPruningInterval(buffer_threshold);
 
             player.initialize(document.querySelector("#videoPlayer"), manifest_url, true);
 
