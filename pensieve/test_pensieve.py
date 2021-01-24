@@ -64,10 +64,21 @@ def main():
     # buf_thresh_list = [60, 100, 120]
     # drain_buffer_time_list = [400, 500, 600]
     # packet_payload_portion_list = [0.7, 0.8, 0.9]
-    link_rtt_list = [10, 100, 200, 300, 10000]
-    buf_thresh_list = [20, 30, 60, 100, 120]
-    drain_buffer_time_list = [100, 400, 500, 600, 800, 1000]
-    packet_payload_portion_list = [0.5, 0.7, 0.8, 0.9, 1.0]
+    # link_rtt_list = [10, 100, 200, 300, 10000]
+    # buf_thresh_list = [20, 30, 60, 100, 120]
+    # drain_buffer_time_list = [100, 400, 500, 600, 800, 1000]
+    # packet_payload_portion_list = [0.5, 0.7, 0.8, 0.9, 1.0]
+
+    link_rtt_list = [10, 1000, 2000]
+    buf_thresh_list = [5, 10, 20, 30]
+    drain_buffer_time_list = [50, 1000]
+    packet_payload_portion_list = [0.95, 1.0]
+
+    # link_rtt_list = [10, 300, 400, 500]
+    # buf_thresh_list = [20, 40, 60,  100]
+    # drain_buffer_time_list = [200, 500]
+    # packet_payload_portion_list = [0.7, 0.8]
+
     nb_config_combos = len(buf_thresh_list) * len(link_rtt_list) * \
         len(drain_buffer_time_list) * len(packet_payload_portion_list)
     if args.abr == 'pensieve':
@@ -97,7 +108,7 @@ def main():
     test_envs = []
     traces_time, traces_bw, traces_names = load_traces(args.test_trace_dir)
     for trace_idx, (trace_time, trace_bw, trace_filename) in enumerate(
-            zip(traces_time, traces_bw, traces_names)):
+            zip(traces_time[:50], traces_bw[:50], traces_names[:50])):
         net_env = Environment(args.video_size_file_dir,
                               args.test_env_config, trace_idx,
                               trace_time=trace_time, trace_bw=trace_bw,
