@@ -1,0 +1,30 @@
+{
+    "buffer_threshold": {
+        "values": [
+            60.0
+        ],
+        "unit": "second",
+        "description": "Dash.js MedeiaPlayer buffer threshold."
+    },
+    "delay":{
+        "values": [
+            40.0
+        ],
+        "unit": "millisecond",
+        "description": "Link RTT = 2 * delay."
+    },
+    "uplink_packet_loss_rate": {
+        "values": [
+            0
+        ],
+        "unit": "millisecond",
+        "description": "Uplink packet loss rate between 0 and 1."
+    },
+    "downlink_packet_loss_rate": {
+        "values": [
+            0
+        ],
+        "unit": "millisecond",
+        "description": "Downlink packet loss rate between 0 and 1."
+    }
+}
