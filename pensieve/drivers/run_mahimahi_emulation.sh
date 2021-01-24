@@ -6,7 +6,7 @@ VIDEO_SIZE_DIR=pensieve/data/video_sizes
 ACTOR_PATH=/tank/zxxia/active-domainrand/pensieve_results/7_dims_rand/even_udr_1_rand_interval/actor_ep_50000.pth
 UP_LINK_SPEED_FILE=pensieve/data/12mbps
 TRACE_DIR=pensieve/data/synthetic_traces/test_7_dim_rand_in_dist_mahimahi
-CONFIG_FILE=pensieve/config/emulation/default.json
+CONFIG_FILE=pensieve/config/emulation/param_sweep.json
 
 # The architecture of emulation experiment.
 
@@ -24,7 +24,6 @@ CONFIG_FILE=pensieve/config/emulation/default.json
 # python -m http.server &
 # cd ${ROOT}
 
-# for MM_DELAY in 5 50 500 5000 do
 trap "pkill -f abr_server" SIGINT
 trap "pkill -f abr_server" EXIT
 # trap "pkill -f abr_server && pkill -f 'python -m http.server'" SIGINT
@@ -46,7 +45,7 @@ for buf_th in $(jq -r -c '.buffer_threshold.values[]' ${CONFIG_FILE}); do
                                         --port 8000 \
                                         --abr RL \
                                         --video-size-file-dir ${VIDEO_SIZE_DIR} \
-                                        --summary-dir pensieve/tests/RL_${MM_DELAY} \
+                                        --summary-dir pensieve/tests/RL_${buf_th}_${delay}_${up_pkt_loss}_${down_pkt_loss} \
                                         --trace-file ${trace_file} \
                                         --actor-path ${ACTOR_PATH}"
                     sleep 2
@@ -57,7 +56,7 @@ for buf_th in $(jq -r -c '.buffer_threshold.values[]' ${CONFIG_FILE}); do
                                         --port 8000 \
                                         --abr RobustMPC \
                                         --video-size-file-dir ${VIDEO_SIZE_DIR} \
-                                        --summary-dir pensieve/tests/mpc_${MM_DELAY} \
+                                        --summary-dir pensieve/tests/mpc_${buf_th}_${delay}_${up_pkt_loss}_${down_pkt_loss} \
                                         --trace-file ${trace_file}"
                 done
             done
