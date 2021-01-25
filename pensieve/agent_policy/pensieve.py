@@ -3,6 +3,7 @@ import itertools
 import logging
 import os
 import time
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -54,6 +55,7 @@ class Pensieve(BaseAgentPolicy):
         self.batch_size = batch_size
         self.randomization = randomization
         self.randomization_interval = randomization_interval
+        self.replay_buffer = ReplayBuffer()
 
     def train(self, train_envs, val_envs=None, test_envs=None, iters=1e5,
               reference_agent_policy=None):
@@ -151,6 +153,10 @@ class Pensieve(BaseAgentPolicy):
 
     def central_agent(self, net_params_queues, exp_queues, iters, train_envs,
                       val_envs, test_envs):
+        """Pensieve central agent.
+
+        Collect states, rewards, etc from each agent and train the model.
+        """
         torch.set_num_threads(2)
 
         logging.basicConfig(filename=os.path.join(self.log_dir, 'log_central'),
@@ -204,6 +210,10 @@ class Pensieve(BaseAgentPolicy):
             # critic_gradient_batch = []
             for i in range(self.num_agents):
                 s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
+                # TODO: add s a r into replay buffer
+                import ipdb
+                ipdb.set_trace()
+                self.replay_buffer.add((s_batch, a_batch, r_batch))
                 self.net.get_network_gradient(
                     s_batch, a_batch, r_batch, terminal=terminal,
                     epoch=self.epoch)
@@ -269,6 +279,10 @@ class Pensieve(BaseAgentPolicy):
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
           batch_size, randomization, randomization_interval, num_agents):
+    """Pensieve agent.
+
+    Performs inference and collect states, rewards, etc.
+    """
     torch.set_num_threads(1)
 
     if randomization == 'even_udr':
@@ -391,6 +405,36 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 time_stamp = 0
                 is_1st_step = True
                 video_chunk_rewards = []
+
+class ReplayBuffer(object):
+    """Simple replay buffer."""
+    def __init__(self, max_size=1e6):
+        self.storage = []
+        self.max_size = int(max_size)
+        self.next_idx = 0
+
+    def add(self, data: Tuple):
+        """Add tuples of (state, action, reward)."""
+        assert len(data) == 3
+        if self.next_idx >= len(self.storage):
+            self.storage.append(data)
+        else:
+            self.storage[self.next_idx] = data
+
+        self.next_idx = (self.next_idx + 1) % self.max_size
+
+    def sample(self, batch_size: int = 100):
+        """Randomly sample batch_size of (state, action, reward)."""
+        ind = np.random.randint(0, len(self.storage), size=batch_size)
+        states, actions, rewards = [], [], []
+
+        for i in ind:
+            state, action, reward = self.storage[i]
+            states.append(np.array(state, copy=False))
+            actions.append(np.array(action, copy=False))
+            rewards.append(np.array(reward, copy=False))
+
+        return np.array(states), np.array(actions), np.array(rewards)
 
 
 def compare_mpc_pensieve(pensieve_abr, val_envs, param_ranges):
