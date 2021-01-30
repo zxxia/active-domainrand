@@ -107,8 +107,9 @@ def main():
             train_envs.append(net_env)
     else:
         train_envs = [Environment(args.video_size_file_dir,
-                                  args.train_env_config, 0, fixed=False,
-                                  trace_video_same_duration_flag=True)]
+                                  args.train_env_config, i, fixed=False,
+                                  trace_video_same_duration_flag=True)
+                                  for i in range(100)]
 
     # prepare train dataset
     val_envs = None
