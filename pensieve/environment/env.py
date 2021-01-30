@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Union, List
 
 import numpy as np
 
@@ -17,9 +18,11 @@ from pensieve.utils import linear_reward
 class Environment:
     """Simulated network environment for Pensieve."""
 
-    def __init__(self, video_size_file_dir, config_file, seed, trace_time=None,
-                 trace_bw=None, trace_file_name=None, fixed=True,
-                 trace_video_same_duration_flag=False):
+    def __init__(self, video_size_file_dir: str, config_file: str, seed: int,
+                 trace_time: Union[List[int], None] = None,
+                 trace_bw: Union[List[float], None] = None,
+                 trace_file_name: Union[str, None] = None, fixed: bool = True,
+                 trace_video_same_duration_flag: bool =False):
         """Initialize a simulated network environment for Pensieve.
 
         Args
@@ -63,7 +66,8 @@ class Environment:
         elif trace_time is not None and trace_bw is None:
             raise ValueError("trace_bw is None.")
         else:
-            assert len(trace_time) == len(trace_bw), \
+            assert (isinstance(trace_time, List) and isinstance(trace_bw, List)
+                    and len(trace_time) == len(trace_bw)), \
                 "trace_bw and trace_time have different length."
             self.trace_time = trace_time
             self.trace_bw = trace_bw
