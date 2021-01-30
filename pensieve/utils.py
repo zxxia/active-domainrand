@@ -187,3 +187,15 @@ def natural_sort(arr):
     def alphanum_key(key): return [convert(c)
                                    for c in re.split('([0-9]+)', key)]
     return sorted(arr, key=alphanum_key)
+
+def construct_bitrate_chunksize_map(video_size_file_dir):
+    """Construct a dict mapping bitrate to video chunk size."""
+    video_size = {}  # in bytes
+    for bitrate in range(len(VIDEO_BIT_RATE)):
+        video_size[bitrate] = []
+        video_size_file = os.path.join(video_size_file_dir,
+                                       'video_size_{}'.format(bitrate))
+        with open(video_size_file, 'r') as f:
+            for line in f:
+                video_size[bitrate].append(int(line.split()[0]))
+    return video_size
