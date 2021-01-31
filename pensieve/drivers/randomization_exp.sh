@@ -66,7 +66,8 @@ elif [ $(hostname) = "loon" ]; then
     # CONFIG_FILE='./pensieve/config/randomize_env_parameters1.json'
     # CONFIG_FILE='./pensieve/config/randomize_env_parameters2.json'
     # CONFIG_FILE='./pensieve/config/randomize_parameters_large.json'
-    config_file=pensieve/config/randomize_max_throughput.json
+    # config_file=pensieve/config/randomize_max_throughput.json
+    config_file=pensieve/config/randomize_max_throughput1.json
     # CONFIG_FILE='/data3/zxxia/active-domainrand/pensieve/config/rand_buff_thresh.json'
     # CONFIG_FILE='/data3/zxxia/active-domainrand/pensieve/config/default.json'
 
@@ -82,7 +83,7 @@ elif [ $(hostname) = "loon" ]; then
     method_name="udr_1000_rand_interval"
     # EXP_NAME='4_dims_rand_no_overlap'
     # EXP_NAME='7_dims_rand_large_range_correct_rebuf_penalty'
-    exp_name='1_dim_rand_max_throughput'
+    exp_name='1_dim_rand_max_throughput1'
     # EXP_NAME='1_dim_rand_max_throughput_original_bitrate'
     python -m pensieve.train_pensieve \
         --video-size-file-dir ${video_size_file_dir} \
