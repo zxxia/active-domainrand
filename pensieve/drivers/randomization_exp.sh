@@ -93,6 +93,8 @@ elif [ $(hostname) = "loon" ]; then
         --randomization-interval 1000 \
         --randomization udr \
         --total-epoch 50000
+elif [ $(hostname) = "linux" ] || [ $(hostname) = "linux1" ] || [ $(hostname) = "linux2" ] || [ $(hostname) = "linux3" ]; then
+    echo "Linux"
 else
     echo "Do nothing"
 fi
