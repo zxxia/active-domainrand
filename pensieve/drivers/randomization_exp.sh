@@ -61,6 +61,38 @@ elif [ $(hostname) = "silver" ]; then
     echo "in silver"
 elif [ $(hostname) = "loon" ]; then
     echo "in loon"
+    # VIDEO_SIZE_FILE_DIR='./pensieve/data/video_size_6_larger'
+    # CONFIG_FILE='/data3/zxxia/active-domainrand/pensieve/config/randomize_env_parameters.json'
+    # CONFIG_FILE='./pensieve/config/randomize_env_parameters1.json'
+    # CONFIG_FILE='./pensieve/config/randomize_env_parameters2.json'
+    # CONFIG_FILE='./pensieve/config/randomize_parameters_large.json'
+    config_file=pensieve/config/randomize_max_throughput.json
+    # CONFIG_FILE='/data3/zxxia/active-domainrand/pensieve/config/rand_buff_thresh.json'
+    # CONFIG_FILE='/data3/zxxia/active-domainrand/pensieve/config/default.json'
+
+    # TRAIN_TRACE_DIR=./pensieve/data/synthetic_traces/train_buf_cap_smart_train
+    val_trace_dir=pensieve/data/synthetic_traces/val_rand_max_throughput
+    # TEST_TRACE_DIR=./pensieve/data/synthetic_traces/test_buf_cap_smart_train
+
+    summary_dir='pensieve/results'
+
+    # METHOD_NAME='udr_1500_rand_interval'
+    # METHOD_NAME='udr_1_rand_interval'
+    # METHOD_NAME='even_udr_1500_rand_interval'
+    method_name="udr_1000_rand_interval"
+    # EXP_NAME='4_dims_rand_no_overlap'
+    # EXP_NAME='7_dims_rand_large_range_correct_rebuf_penalty'
+    exp_name='1_dim_rand_max_throughput'
+    # EXP_NAME='1_dim_rand_max_throughput_original_bitrate'
+    python -m pensieve.train_pensieve \
+        --video-size-file-dir ${video_size_file_dir} \
+        --train-env-config ${config_file} \
+        --val-env-config ${config_file} \
+        --val-trace-dir ${val_trace_dir} \
+        --summary-dir ${summary_dir}/${exp_name}/${method_name} \
+        --randomization-interval 1000 \
+        --randomization udr \
+        --total-epoch 50000
 else
     echo "Do nothing"
 fi
