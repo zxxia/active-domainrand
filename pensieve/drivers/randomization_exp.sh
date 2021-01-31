@@ -16,13 +16,13 @@ video_size_file_dir=pensieve/data/video_sizes
 
 if [ $(hostname) = "farewell" ]; then
     summary_dir='/tank/zxxia/active-domainrand/pensieve_results'
-    train_config_file='pensieve/config/randomize_network_params1.json'
+    train_config_file='pensieve/config/randomize_network_params5.json'
     val_config_file='pensieve/config/default.json'
     val_trace_dir=pensieve/data/synthetic_traces/val_rand_network_params
     randomization_interval=1000
     udr_type=udr
     method_name=${udr_type}_${randomization_interval}_rand_interval
-    exp_name='randomize_network_params_range1'
+    exp_name='randomize_network_params_range5'
     python -m pensieve.train_pensieve \
         --video-size-file-dir ${video_size_file_dir} \
         --train-env-config ${train_config_file} \
@@ -31,7 +31,7 @@ if [ $(hostname) = "farewell" ]; then
         --randomization ${udr_type} \
         --val-trace-dir ${val_trace_dir} \
         --randomization-interval ${randomization_interval} \
-        --model-save-interval 200
+        --model-save-interval 200 \
         --total-epoch 50000
         # --train-trace-dir ${TRAIN_TRACE_DIR} \
         # --test-env-config ${CONFIG_FILE} \
@@ -53,7 +53,7 @@ elif [ $(hostname) = "silver" ]; then
         --randomization ${udr_type} \
         --val-trace-dir ${val_trace_dir} \
         --randomization-interval ${randomization_interval} \
-        --model-save-interval 200
+        --model-save-interval 200 \
         --total-epoch 50000
         # --train-trace-dir ${TRAIN_TRACE_DIR} \
         # --test-env-config ${CONFIG_FILE} \
