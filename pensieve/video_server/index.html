@@ -20,6 +20,12 @@
             } else {
                 buffer_threshold = parseInt(buffer_threshold);
             }
+            var port = url.searchParams.get("port");
+            if (port == null) {
+                port = 8333;
+            } else {
+                port = parseInt(port);
+            }
             // var abr_id = parseInt(url.searchParams.get("abr_id"));
             var abr = url.searchParams.get("abr_id");
             if (abr == null) {
@@ -67,6 +73,7 @@
             if (abr_id == 6) { //BOLA
                 player.enableBufferOccupancyABR(true);
             }
+            player.setNetworkAddress("localhost", port)
             player.setAbrAlgorithm(abr_id);
 
             //if (abr_id in abr_algorithms) {
