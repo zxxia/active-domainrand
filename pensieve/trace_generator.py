@@ -5,7 +5,7 @@ import numpy as np
 
 BYTES_PER_PKT = 1500.0
 MILLISEC_IN_SEC = 1000.0
-EXP_LEN = 5000.0  # millisecond
+EXP_LEN = 1000.0  # millisecond
 
 
 def convert_to_mahimahi_traces(input_trace_dir, output_trace_dir):
@@ -29,7 +29,7 @@ def convert_to_mahimahi_trace(input_trace, output_trace):
         # ipdb.set_trace()
         for _, throughput, _ in csv_reader:
             throughput = float(throughput)
-            pkt_per_ms = throughput * 1e6  / BYTES_PER_PKT / MILLISEC_IN_SEC
+            pkt_per_ms = throughput * 1e6 / 8 / BYTES_PER_PKT / MILLISEC_IN_SEC
 
             millisec_count = 0
             pkt_count = 0
