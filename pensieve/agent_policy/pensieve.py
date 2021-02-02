@@ -11,9 +11,10 @@ import torch.multiprocessing as mp
 
 from pensieve.a3c import A3C, compute_entropy
 from pensieve.agent_policy import BaseAgentPolicy, RobustMPC
-from pensieve.constants import (A_DIM, ACTOR_LR_RATE, CRITIC_LR_RATE,
+from pensieve.constants import (ACTOR_LR_RATE, A_DIM, CRITIC_LR_RATE,
                                 DEFAULT_QUALITY, M_IN_K, S_INFO, S_LEN,
                                 VIDEO_BIT_RATE)
+from pensieve.utils import write_json_file
 
 
 class Pensieve(BaseAgentPolicy):
@@ -288,7 +289,17 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
     Performs inference and collect states, rewards, etc.
     """
     torch.set_num_threads(1)
-
+    epoch = 0
+    if 'udr' in randomization:
+        os.makedirs(os.path.join(summary_dir, "train_envs"), exist_ok=True)
+        for env_idx, net_env in enumerate(net_envs):
+            env_log_file = os.path.join(
+                summary_dir, "train_envs",
+                "env{}_agent{}_epoch{}.json".format(env_idx, agent_id, epoch))
+            env_dims = net_env.get_dimension_values()
+            env_dims['trace_time'] = net_env.trace_time
+            env_dims['trace_bw'] = net_env.trace_bw
+            write_json_file(env_log_file, env_dims)
     if randomization == 'even_udr':
         for net_env in net_envs:
             for name, dim in net_env.dimensions.items():
@@ -322,7 +333,6 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
         net.hard_update_actor_network(actor_net_params)
 
         time_stamp = 0
-        epoch = 0
         env_idx = prng.randint(len(net_envs))
         net_env = net_envs[env_idx]
         bit_rate = DEFAULT_QUALITY
@@ -401,6 +411,17 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                         for tmp_env in net_envs:
                             tmp_env.randomize(None)
                         epoch_randomization = epoch
+                        os.makedirs(os.path.join(summary_dir, "train_envs"),
+                                    exist_ok=True)
+                        for env_idx, net_env in enumerate(net_envs):
+                            env_log_file = os.path.join(
+                                summary_dir, "train_envs",
+                                "env{}_agent{}_epoch{}.json".format(
+                                    env_idx, agent_id, epoch))
+                            env_dims = net_env.get_dimension_values()
+                            env_dims['trace_time'] = net_env.trace_time
+                            env_dims['trace_bw'] = net_env.trace_bw
+                            write_json_file(env_log_file, env_dims)
                 else:
                     raise NotImplementedError
                 env_idx = prng.randint(len(net_envs))
