@@ -64,6 +64,8 @@ def parse_args():
     parser.add_argument('--ip', type=str, help='IP of HTTP video server.')
     parser.add_argument('--port', type=int,
                         help='Port number of HTTP video server.')
+    parser.add_argument('--abr-server-port', type=int, default=8333,
+                        help='Port number of ABR server.')
 
     parser.add_argument('--buffer-threshold', type=int, default=60,
             help='Buffer threshold of Dash.js MediaPlayer. Unit: Second.')
@@ -139,7 +141,9 @@ def main():
     # generate url
     url = 'http://{}:{}/index.html'.format(ip, port_number)
     # url_params = {'abr_id': ABR_ID_MAP[abr_algo]}
-    url_params = {'abr_id': abr_algo, 'buffer_threshold': args.buffer_threshold}
+    url_params = {'abr_id': abr_algo,
+                  'buffer_threshold': args.buffer_threshold,
+                  'port': args.abr_server_port}
     url = add_url_params(url, url_params)
 
     # ip = json.loads(urlopen("http://ip.jsontest.com/").read().decode('utf-8'))['ip']
