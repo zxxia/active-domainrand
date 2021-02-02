@@ -64,6 +64,8 @@ def parse_args():
     parser.add_argument('--ip', type=str, help='IP of HTTP video server.')
     parser.add_argument('--port', type=int,
                         help='Port number of HTTP video server.')
+    parser.add_argument('--abr-server-ip', type=str, default='localhost',
+                        help='IP of ABR server.')
     parser.add_argument('--abr-server-port', type=int, default=8333,
                         help='Port number of ABR server.')
 
@@ -133,7 +135,7 @@ def main():
     # prevent multiple process from being synchronized
     abr_server_proc = mp.Process(target=run_abr_server, args=(
         abr_algo, args.trace_file, args.summary_dir, args.actor_path,
-        args.video_size_file_dir))
+        args.video_size_file_dir, args.abr_server_ip, args.abr_server_port))
     abr_server_proc.start()
 
     sleep(3)
