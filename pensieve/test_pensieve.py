@@ -64,6 +64,19 @@ def main():
     # buf_thresh_list = [60, 100, 120]
     # drain_buffer_time_list = [400, 500, 600]
     # packet_payload_portion_list = [0.7, 0.8, 0.9]
+    # link_rtt_list = [10, 100, 200, 300, 5000]
+    # buf_thresh_list = [20, 30, 60, 100, 120]
+    # drain_buffer_time_list = [100, 400, 500, 600, 800, 1000]
+    # packet_payload_portion_list = [0.5, 0.7, 0.8, 0.9, 1.0]
+    # link_rtt_list = [10, 300, 400, 5000]
+    # buf_thresh_list = [10, 20, 40, 60,  150]
+    # drain_buffer_time_list = [50, 500,  1000]
+    # packet_payload_portion_list = [0.4, 0.8, 1.0]
+
+    link_rtt_list = [10, 50, 100, 500, 1000, 5000, 10000]
+    buf_thresh_list = [10, 50, 100, 500, 1000, 5000, 10000]
+    drain_buffer_time_list = [500, 5000, 10000]
+    packet_payload_portion_list = [0.2, 0.4, 0.6, 0.8, 1.0]
     # link_rtt_list = [10, 100, 200, 300, 10000]
     # buf_thresh_list = [20, 30, 60, 100, 120]
     # drain_buffer_time_list = [100, 400, 500, 600, 800, 1000]
@@ -155,5 +168,16 @@ def main():
         print("{}/{}".format(i, nb_config_combos))
 
 
+def save_trace_logs(net_envs, results, summary_dir, prefix, dataset):
+    log_save_dir = os.path.join(summary_dir, 'test_results', dataset)
+    os.makedirs(log_save_dir, exist_ok=True)
+    for net_env in net_envs:
+        with open(os.path.join(log_save_dir, prefix + net_env.trace_filename),
+                  'w', 1) as f:
+            csv_writer = csv.writer(f, deliminator='\t' ,lineterminator='\n')
+            csv_writer.writerow(["time_stamp", "bitrate", "buffer_size",
+                                 "rebuffer", "video_chunk_size", "delay",
+                                 "reward", "future_bandwidth"])
+            csv_writer.writerows(results)
 if __name__ == "__main__":
     main()

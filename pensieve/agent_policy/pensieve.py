@@ -3,6 +3,7 @@ import itertools
 import logging
 import os
 import time
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -10,9 +11,10 @@ import torch.multiprocessing as mp
 
 from pensieve.a3c import A3C, compute_entropy
 from pensieve.agent_policy import BaseAgentPolicy, RobustMPC
-from pensieve.constants import (A_DIM, ACTOR_LR_RATE, CRITIC_LR_RATE,
+from pensieve.constants import (ACTOR_LR_RATE, A_DIM, CRITIC_LR_RATE,
                                 DEFAULT_QUALITY, M_IN_K, S_INFO, S_LEN,
                                 VIDEO_BIT_RATE)
+from pensieve.utils import write_json_file
 
 
 class Pensieve(BaseAgentPolicy):
@@ -54,9 +56,10 @@ class Pensieve(BaseAgentPolicy):
         self.batch_size = batch_size
         self.randomization = randomization
         self.randomization_interval = randomization_interval
+        self.replay_buffer = ReplayBuffer()
 
     def train(self, train_envs, val_envs=None, test_envs=None, iters=1e5,
-              reference_agent_policy=None):
+              reference_agent_policy=None, use_replay_buffer=False):
         for net_env in train_envs:
             net_env.reset()
         # inter-process communication queues
@@ -85,7 +88,7 @@ class Pensieve(BaseAgentPolicy):
             agents[i].start()
 
         self.central_agent(net_params_queues, exp_queues, iters, train_envs,
-                           val_envs, test_envs)
+                           val_envs, test_envs, use_replay_buffer)
 
         # wait unit training is done
         for i in range(self.num_agents):
@@ -150,7 +153,11 @@ class Pensieve(BaseAgentPolicy):
             self.net.load_critic_model(critic_model_path)
 
     def central_agent(self, net_params_queues, exp_queues, iters, train_envs,
-                      val_envs, test_envs):
+                      val_envs, test_envs, use_replay_buffer):
+        """Pensieve central agent.
+
+        Collect states, rewards, etc from each agent and train the model.
+        """
         torch.set_num_threads(2)
 
         logging.basicConfig(filename=os.path.join(self.log_dir, 'log_central'),
@@ -204,13 +211,21 @@ class Pensieve(BaseAgentPolicy):
             # critic_gradient_batch = []
             for i in range(self.num_agents):
                 s_batch, a_batch, r_batch, terminal, info = exp_queues[i].get()
+                entropy = info['entropy']
+                # add s a r e into replay buffer and sample data out of buffer
+                if use_replay_buffer:
+                    for s, a, r, e in zip(s_batch, a_batch, r_batch, entropy):
+                        self.replay_buffer.add((s, a, r, e))
+                    s_batch, a_batch, r_batch, entropy = self.replay_buffer.sample(
+                        self.batch_size)
+
                 self.net.get_network_gradient(
                     s_batch, a_batch, r_batch, terminal=terminal,
                     epoch=self.epoch)
                 total_reward += np.sum(r_batch)
                 total_batch_len += len(r_batch)
                 total_agents += 1.0
-                total_entropy += np.sum(info['entropy'])
+                total_entropy += np.sum(entropy)
             print('central_agent: {}/{}, total epoch trained {}'.format(
                 epoch, int(iters), self.epoch))
 
@@ -269,8 +284,22 @@ class Pensieve(BaseAgentPolicy):
 
 def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
           batch_size, randomization, randomization_interval, num_agents):
-    torch.set_num_threads(1)
+    """Pensieve agent.
 
+    Performs inference and collect states, rewards, etc.
+    """
+    torch.set_num_threads(1)
+    epoch = 0
+    if 'udr' in randomization:
+        os.makedirs(os.path.join(summary_dir, "train_envs"), exist_ok=True)
+        for env_idx, net_env in enumerate(net_envs):
+            env_log_file = os.path.join(
+                summary_dir, "train_envs",
+                "env{}_agent{}_epoch{}.json".format(env_idx, agent_id, epoch))
+            env_dims = net_env.get_dimension_values()
+            env_dims['trace_time'] = net_env.trace_time
+            env_dims['trace_bw'] = net_env.trace_bw
+            write_json_file(env_log_file, env_dims)
     if randomization == 'even_udr':
         for net_env in net_envs:
             for name, dim in net_env.dimensions.items():
@@ -304,7 +333,6 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
         net.hard_update_actor_network(actor_net_params)
 
         time_stamp = 0
-        epoch = 0
         env_idx = prng.randint(len(net_envs))
         net_env = net_envs[env_idx]
         bit_rate = DEFAULT_QUALITY
@@ -383,6 +411,17 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                         for tmp_env in net_envs:
                             tmp_env.randomize(None)
                         epoch_randomization = epoch
+                        os.makedirs(os.path.join(summary_dir, "train_envs"),
+                                    exist_ok=True)
+                        for env_idx, net_env in enumerate(net_envs):
+                            env_log_file = os.path.join(
+                                summary_dir, "train_envs",
+                                "env{}_agent{}_epoch{}.json".format(
+                                    env_idx, agent_id, epoch))
+                            env_dims = net_env.get_dimension_values()
+                            env_dims['trace_time'] = net_env.trace_time
+                            env_dims['trace_bw'] = net_env.trace_bw
+                            write_json_file(env_log_file, env_dims)
                 else:
                     raise NotImplementedError
                 env_idx = prng.randint(len(net_envs))
@@ -391,6 +430,40 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                 time_stamp = 0
                 is_1st_step = True
                 video_chunk_rewards = []
+
+
+class ReplayBuffer(object):
+    """Simple replay buffer."""
+
+    def __init__(self, max_size=1e6):
+        self.storage = []
+        self.max_size = int(max_size)
+        self.next_idx = 0
+
+    def add(self, data: Tuple):
+        """Add tuples of (state, action, reward)."""
+        assert len(data) == 4
+        if self.next_idx >= len(self.storage):
+            self.storage.append(data)
+        else:
+            self.storage[self.next_idx] = data
+
+        self.next_idx = (self.next_idx + 1) % self.max_size
+
+    def sample(self, batch_size: int = 100):
+        """Randomly sample batch_size of (state, action, reward)."""
+        print("sample", len(self.storage))
+        ind = np.random.randint(0, len(self.storage), size=batch_size)
+        states, actions, rewards, entropies = [], [], [], []
+
+        for i in ind:
+            state, action, reward, entropy = self.storage[i]
+            states.append(np.array(state, copy=False))
+            actions.append(np.array(action, copy=False))
+            rewards.append(np.array(reward, copy=False))
+            entropies.append(np.array(entropy, copy=False))
+
+        return np.array(states), np.array(actions), np.array(rewards), np.array(entropies)
 
 
 def compare_mpc_pensieve(pensieve_abr, val_envs, param_ranges):

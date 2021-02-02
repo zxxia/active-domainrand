@@ -1,6 +1,9 @@
 import argparse
+import json
 import logging
 import os
+
+import numpy as np
 
 from pensieve.agent_policy import Pensieve
 from pensieve.environment import Environment
@@ -107,8 +110,9 @@ def main():
             train_envs.append(net_env)
     else:
         train_envs = [Environment(args.video_size_file_dir,
-                                  args.train_env_config, 0, fixed=False,
-                                  trace_video_same_duration_flag=True)]
+                                  args.train_env_config, i, fixed=False,
+                                  trace_video_same_duration_flag=True)
+                                  for i in range(100)]
 
     # prepare train dataset
     val_envs = None
@@ -124,6 +128,23 @@ def main():
                                   trace_file_name=trace_filename, fixed=True,
                                   trace_video_same_duration_flag=True)
             val_envs.append(net_env)
+
+        # with open(args.val_env_config, mode='r') as f:
+        #     config = json.load(f)
+        # dimensions = []
+        # for dimension in config['dimensions']:
+        #     if dimension['name'] in ["buffer_threshold",  "link_rtt",
+        #                              "drain_buffer_sleep_time",
+        #                              "packet_payload_portion"]:
+        #         dimensions.append(
+        #             np.linspace(dimension['min'], dimension['max'], num=3))
+        #     # dimensions[dimension['name']] = Dimension(
+        #     #     default_value=dimension['default'],
+        #     #     seed=self.seed,
+        #     #     min_value=dimension['min'],
+        #     #     max_value=dimension['max'],
+        #     #     name=dimension['name'],
+        #     #     unit=dimension['unit'])
 
     # prepare test dataset
     test_envs = None

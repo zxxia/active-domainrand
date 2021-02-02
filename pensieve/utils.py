@@ -1,3 +1,4 @@
+import json
 import math
 import os
 import random
@@ -188,6 +189,7 @@ def natural_sort(arr):
                                    for c in re.split('([0-9]+)', key)]
     return sorted(arr, key=alphanum_key)
 
+
 def construct_bitrate_chunksize_map(video_size_file_dir):
     """Construct a dict mapping bitrate to video chunk size."""
     video_size = {}  # in bytes
@@ -199,3 +201,16 @@ def construct_bitrate_chunksize_map(video_size_file_dir):
             for line in f:
                 video_size[bitrate].append(int(line.split()[0]))
     return video_size
+
+
+def read_json_file(filename):
+    """Load json object from a file."""
+    with open(filename, 'r') as f:
+        content = json.load(f)
+    return content
+
+
+def write_json_file(filename, content):
+    """Dump into a json file."""
+    with open(filename, 'w') as f:
+        json.dump(content, f, indent=4)

@@ -1,8 +1,10 @@
 MODEL_SAVE_INTERVAL = 500
 VIDEO_BIT_RATE = [300, 750, 1200, 1850, 2850, 4300]  # Kbps
+# VIDEO_BIT_RATE = [300, 1200, 2850, 6500, 33000, 165000]
 HD_REWARD = [1, 2, 3, 12, 15, 20]
 M_IN_K = 1000.0
 REBUF_PENALTY = 4.3  # 1 sec rebuffering -> 3 Mbps
+# REBUF_PENALTY = 165  # 1 sec rebuffering -> 3 Mbps
 SMOOTH_PENALTY = 1
 DEFAULT_QUALITY = 1  # default video quality without agent
 
