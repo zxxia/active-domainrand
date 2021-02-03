@@ -148,7 +148,14 @@ def adjust_n_random_traces(all_ts, all_bw, random_seed, robust_noise, sample_len
 
 
 @jit(nopython=True)
-def linear_reward(current_bitrate, last_bitrate, rebuffer):
+def linear_reward(current_bitrate: int, last_bitrate: int, rebuffer: float):
+    """ Return linear QoE metric.
+
+    Args
+        current_bitrate: current bit rate (kbps).
+        last_bitrate: previous bit rate (kbps).
+        rebuffer: rebuffering time (second).
+    """
     reward = current_bitrate / M_IN_K - REBUF_PENALTY * rebuffer - \
         SMOOTH_PENALTY * np.abs(current_bitrate - last_bitrate) / M_IN_K
     return reward

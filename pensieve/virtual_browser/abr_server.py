@@ -81,7 +81,7 @@ def make_request_handler(server_states):
                       post_data['lastChunkStartTime'],
                       post_data['lastChunkFinishTime'],
                       post_data['lastChunkSize'],
-                      post_data['RebufferTime'],
+                      post_data['RebufferTime'] / M_IN_K,
                       post_data['buffer'],
                       post_data['bufferAdjusted'],
                       post_data['bandwidthEst'],
@@ -123,7 +123,7 @@ def make_request_handler(server_states):
                 reward = linear_reward(
                     VIDEO_BIT_RATE[post_data['lastquality']],
                     VIDEO_BIT_RATE[self.server_states['last_bit_rate']],
-                    rebuffer_time)
+                    rebuffer_time / M_IN_K)
                 # VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
                 #     - REBUF_PENALTY * rebuffer_time / M_IN_K \
                 #     - SMOOTH_PENALTY * np.abs(
@@ -186,8 +186,13 @@ def make_request_handler(server_states):
                 self.log_writer.writerow(
                     [time.time(), VIDEO_BIT_RATE[post_data['lastquality']],
                      post_data['buffer'], rebuffer_time / M_IN_K,
-                     video_chunk_size, video_chunk_fetch_time, reward])
+                     video_chunk_size, video_chunk_fetch_time, reward,
+                     self.server_states['future_bandwidth']])
                 if isinstance(self.abr, Pensieve):
+                    self.log_writer.writerow(
+                        [time.time(), VIDEO_BIT_RATE[post_data['lastquality']],
+                         post_data['buffer'], rebuffer_time / M_IN_K,
+                         video_chunk_size, video_chunk_fetch_time, reward])
                     bit_rate, _ = self.abr.select_action(
                         self.server_states['state'])
                     bit_rate = bit_rate.item()
@@ -195,11 +200,12 @@ def make_request_handler(server_states):
                     last_index = int(post_data['lastRequest'])
                     future_chunk_cnt = min(self.abr.mpc_future_chunk_cnt,
                                            TOTAL_VIDEO_CHUNK - last_index - 1)
-                    bit_rate, _ = self.abr.select_action(
+                    bit_rate, self.server_states['future_bandwidth'] = \
+                        self.abr.select_action(
                         self.server_states['state'], last_index,
-                        future_chunk_cnt,
-                        np.array([self.video_size[i]
-                                  for i in sorted(self.video_size)]),
+                        future_chunk_cnt, np.array(
+                            [self.video_size[i]
+                             for i in sorted(self.video_size)]),
                         post_data['lastquality'], post_data['buffer'])
                     # print(self.server_states['state'], last_index,
                     #       future_chunk_cnt, bit_rate)
@@ -281,7 +287,7 @@ def run_abr_server(abr, trace_file, summary_dir, actor_path,
                             lineterminator='\n')
     log_writer.writerow(
         ['timestamp', 'bit_rate', 'buffer_size', 'rebuffer_time',
-         'video_chunk_size', 'download_time', 'reward'])
+         'video_chunk_size', 'download_time', 'reward', 'future_bandwidth'])
 
     # variables and states needed to track among requests
     server_states = {
@@ -291,7 +297,8 @@ def run_abr_server(abr, trace_file, summary_dir, actor_path,
         'video_chunk_count': 0,
         "last_total_rebuf": 0,
         'last_bit_rate': DEFAULT_QUALITY,
-        'state': np.zeros((1, S_INFO, S_LEN))
+        'state': np.zeros((1, S_INFO, S_LEN)),
+        'future_bandwidth': 0
     }
     handler_class = make_request_handler(server_states)
 
