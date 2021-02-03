@@ -8,44 +8,6 @@ MILLISEC_IN_SEC = 1000.0
 EXP_LEN = 1000.0  # millisecond
 
 
-def convert_to_mahimahi_traces(input_trace_dir, output_trace_dir):
-    os.makedirs(output_trace_dir, exist_ok=True)
-    files = os.listdir(input_trace_dir)
-    for trace_file in files:
-        if trace_file.startswith('.'):
-            continue
-        input_trace = os.path.join(input_trace_dir, trace_file)
-        output_trace = os.path.join(output_trace_dir, trace_file)
-        print('Converting {} to {}...'.format(input_trace, output_trace))
-        convert_to_mahimahi_trace(input_trace, output_trace)
-
-
-def convert_to_mahimahi_trace(input_trace, output_trace):
-    with open(input_trace, 'r') as f, open(output_trace, 'w', 1) as mf:
-        csv_reader = csv.reader(f, delimiter='\t')
-        millisec_time = 0
-        mf.write(str(millisec_time) + '\n')
-        # import ipdb
-        # ipdb.set_trace()
-        for _, throughput, _ in csv_reader:
-            throughput = float(throughput)
-            pkt_per_ms = throughput * 1e6 / 8 / BYTES_PER_PKT / MILLISEC_IN_SEC
-
-            millisec_count = 0
-            pkt_count = 0
-            while True:
-                millisec_count += 1
-                millisec_time += 1
-                to_send = (millisec_count * pkt_per_ms) - pkt_count
-                to_send = np.floor(to_send)
-
-                for _ in range(int(to_send)):
-                    mf.write(str(millisec_time) + '\n')
-
-                pkt_count += to_send
-
-                if millisec_count >= EXP_LEN:
-                    break
 
 
 def transition(state, variance, prob_stay, bitrate_states, transition_probs,
