@@ -136,7 +136,7 @@ def predict_bitrate(future_chunk_length, buffer_size, bit_rate, last_index,
             # this is MB/MB/s --> seconds
             row_len = len(video_size[chunk_quality])
             download_time = video_size[chunk_quality,
-                                       int(index % (row_len-1))] / \
+                                       int(index % (row_len))] / \
                 B_IN_MB / future_bandwidth
             if (curr_buffer < download_time):
                 rebuffer_time = (download_time - curr_buffer)

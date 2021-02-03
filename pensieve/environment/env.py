@@ -89,7 +89,7 @@ class Environment:
         self._construct_bitrate_chunksize_map(video_size_file_dir)
 
         # get total number of chunks in a video
-        self.total_video_chunk = len(self.video_size[0]) - 1
+        self.total_video_chunk = len(self.video_size[0]) # - 1
         if trace_video_same_duration_flag:
             # if the trace is longer than the video, extend the video
             self.total_video_chunk = max(
@@ -220,7 +220,7 @@ class Environment:
         assert 0 <= bitrate < len(VIDEO_BIT_RATE)
 
         video_chunk_size = self.video_size[bitrate][
-            self.nb_chunk_sent % (len(self.video_size[bitrate])-1)]
+            self.nb_chunk_sent % (len(self.video_size[bitrate]))]
 
         # use the delivery opportunity in mahimahi
         delay = 0.0  # in ms
@@ -312,7 +312,7 @@ class Environment:
         for i in range(len(VIDEO_BIT_RATE)):
             next_video_chunk_sizes.append(
                 self.video_size[i][
-                    self.nb_chunk_sent % (len(self.video_size[i])-1)])
+                    self.nb_chunk_sent % (len(self.video_size[i]))])
 
         rebuf = rebuf / MILLISECONDS_IN_SECOND
 

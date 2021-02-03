@@ -146,7 +146,7 @@ def make_request_handler(server_states):
 
                 next_video_chunk_sizes = []
                 for i in range(A_DIM):
-                    if 0 <= self.server_states['video_chunk_count'] <= TOTAL_VIDEO_CHUNK:
+                    if 0 <= self.server_states['video_chunk_count'] < TOTAL_VIDEO_CHUNK:
                         next_video_chunk_sizes.append(
                             self.video_size[i][self.server_states['video_chunk_count']])
                     else:
@@ -187,12 +187,9 @@ def make_request_handler(server_states):
                     [time.time(), VIDEO_BIT_RATE[post_data['lastquality']],
                      post_data['buffer'], rebuffer_time / M_IN_K,
                      video_chunk_size, video_chunk_fetch_time, reward,
+                     post_data['bandwidthEst'] / 1000,
                      self.server_states['future_bandwidth']])
                 if isinstance(self.abr, Pensieve):
-                    self.log_writer.writerow(
-                        [time.time(), VIDEO_BIT_RATE[post_data['lastquality']],
-                         post_data['buffer'], rebuffer_time / M_IN_K,
-                         video_chunk_size, video_chunk_fetch_time, reward])
                     bit_rate, _ = self.abr.select_action(
                         self.server_states['state'])
                     bit_rate = bit_rate.item()
@@ -287,7 +284,8 @@ def run_abr_server(abr, trace_file, summary_dir, actor_path,
                             lineterminator='\n')
     log_writer.writerow(
         ['timestamp', 'bit_rate', 'buffer_size', 'rebuffer_time',
-         'video_chunk_size', 'download_time', 'reward', 'future_bandwidth'])
+         'video_chunk_size', 'download_time', 'reward',
+         'bandwidth_estimation','future_bandwidth'])
 
     # variables and states needed to track among requests
     server_states = {
