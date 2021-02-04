@@ -138,7 +138,7 @@ def main():
         args.video_size_file_dir, args.abr_server_ip, args.abr_server_port))
     abr_server_proc.start()
 
-    sleep(3)
+    sleep(0.5)
 
     # generate url
     url = 'http://{}:{}/index.html'.format(ip, port_number)
@@ -188,7 +188,7 @@ def main():
                                   desired_capabilities=desired_caps)
 
         # run chrome
-        driver.set_page_load_timeout(300)
+        driver.set_page_load_timeout(10)
         driver.get(url)
 
         sleep(run_time)

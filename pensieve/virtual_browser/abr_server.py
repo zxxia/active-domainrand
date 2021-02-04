@@ -140,9 +140,9 @@ def make_request_handler(server_states):
                 video_chunk_size = post_data['lastChunkSize']
 
                 # compute number of video chunks left
+                self.server_states['video_chunk_count'] += 1
                 video_chunk_remain = TOTAL_VIDEO_CHUNK - \
                     self.server_states['video_chunk_count']
-                self.server_states['video_chunk_count'] += 1
 
                 next_video_chunk_sizes = []
                 for i in range(A_DIM):
