@@ -194,8 +194,12 @@ class Environment:
 
     def reset(self, **kwargs):
         """Reset the environment paramters to default values."""
-        self.trace_ptr = 1
-        self.last_trace_ts = self.trace_time[self.trace_ptr - 1]
+        if 'random_start' in kwargs and kwargs['random_start']:
+            self.trace_ptr = self.prng.randint(len(self.trace_time))
+            self.last_trace_ts = self.trace_time[self.trace_ptr - 1]
+        else:
+            self.trace_ptr = 1
+            self.last_trace_ts = self.trace_time[self.trace_ptr - 1]
         self.nb_chunk_sent = 0
         self.buffer_size = 0
         self.last_bitrate = DEFAULT_QUALITY

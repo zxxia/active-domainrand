@@ -403,7 +403,7 @@ def agent(agent_id, net_params_queue, exp_queue, net_envs, summary_dir,
                                      env_params['step'],
                                      env_params['min_throughput'],
                                      env_params['max_throughput']])
-                net_env.reset()
+                net_env.reset(random_start=True)
                 if randomization == '':
                     pass  # no randomization
                 elif 'udr' in randomization:
