@@ -157,7 +157,7 @@ def main():
                                   args.test_env_config, trace_idx,
                                   trace_time=trace_time, trace_bw=trace_bw,
                                   trace_file_name=trace_filename, fixed=True,
-                                  trace_video_same_duration_flag=True)
+                                  trace_video_same_duration_flag=False)
             test_envs.append(net_env)
 
     # test training

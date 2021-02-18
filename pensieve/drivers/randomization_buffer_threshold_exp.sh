@@ -32,28 +32,32 @@ if [ $(hostname) = "farewell" ]; then
         # --test-env-config ${CONFIG_FILE} \
         # --test-trace-dir ${TEST_TRACE_DIR} \
 elif [ $(hostname) = "silver" ]; then
-    summary_dir='pensieve/results'
-    train_config_file='pensieve/config/randomize_network_params7.json'
-    val_config_file='pensieve/config/default.json'
-    val_trace_dir=pensieve/data/synthetic_traces/val_rand_network_params
-    randomization_interval=1000
-    udr_type=udr
-    method_name=${udr_type}_${randomization_interval}_rand_interval
-    exp_name='randomize_network_params_range7'
-    python -m pensieve.train_pensieve \
-        --video-size-file-dir ${video_size_file_dir} \
-        --train-env-config ${train_config_file} \
-        --val-env-config ${val_config_file} \
-        --summary-dir ${summary_dir}/${exp_name}/${method_name} \
-        --randomization ${udr_type} \
-        --val-trace-dir ${val_trace_dir} \
-        --randomization-interval ${randomization_interval} \
-        --model-save-interval 200 \
-        --total-epoch 50000
-        # --train-trace-dir ${TRAIN_TRACE_DIR} \
-        # --test-env-config ${CONFIG_FILE} \
-        # --test-trace-dir ${TEST_TRACE_DIR} \
     echo "in silver"
+    # for range_id in 0 1 2 3 4; do
+    for range_id in 5 6 7 8 9; do
+        summary_dir='pensieve/results'
+        train_trace_dir=./pensieve/data/train
+        train_config_file=pensieve/config/rand_buffer_threshold/randomize_buffer_threshold${range_id}.json
+        val_config_file='pensieve/config/default.json'
+        val_trace_dir=pensieve/data/val
+        randomization_interval=1000
+        udr_type=udr
+        method_name=${udr_type}_${randomization_interval}_rand_interval
+        exp_name=randomize_buffer_threshold_range${range_id}
+        python -m pensieve.train_pensieve \
+            --video-size-file-dir ${video_size_file_dir} \
+            --train-env-config ${train_config_file} \
+            --train-trace-dir ${train_trace_dir} \
+            --val-env-config ${val_config_file} \
+            --summary-dir ${summary_dir}/${exp_name}/${method_name} \
+            --randomization ${udr_type} \
+            --val-trace-dir ${val_trace_dir} \
+            --randomization-interval ${randomization_interval} \
+            --model-save-interval 200 \
+            --total-epoch 50000 #> ${summary_dir}/${exp_name}/${method_name}/stdout_log
+            # --test-env-config ${CONFIG_FILE} \
+            # --test-trace-dir ${TEST_TRACE_DIR} \
+    done
 elif [ $(hostname) = "loon" ]; then
     echo "in loon"
     # VIDEO_SIZE_FILE_DIR='./pensieve/data/video_size_6_larger'
