@@ -1,0 +1,90 @@
+{
+    "env": "Pensieve",
+    "dimensions": [
+        {
+            "name": "video_chunk_length",
+            "default": 4.0,
+            "min": 4.0,
+            "max": 4.0,
+            "unit": "second"
+        },
+        {
+            "name": "buffer_threshold",
+            "default": 4.0,
+            "min": 1.0,
+            "max": 10.0,
+            "unit": "second"
+        },
+        {
+            "name": "link_rtt",
+            "default": 80.0,
+            "min": 80.0,
+            "max": 80.0,
+            "unit": "millisecond"
+        },
+        {
+            "name": "drain_buffer_sleep_time",
+            "default": 500.0,
+            "min": 500.0,
+            "max": 500.0,
+            "unit": "millisecond"
+        },
+        {
+            "name": "packet_payload_portion",
+            "default": 0.95,
+            "min": 0.95,
+            "max": 0.95,
+            "unit": ""
+        },
+        {
+            "name": "T_l",
+            "default": 50,
+            "min": 50,
+            "max": 50,
+            "unit": ""
+        },
+        {
+            "name": "T_s",
+            "default": 10,
+            "min": 10,
+            "max": 10,
+            "unit": ""
+        },
+        {
+            "name": "cov",
+            "default": 0.2,
+            "min": 0.2,
+            "max": 0.2,
+            "unit": ""
+        },
+        {
+            "name": "duration",
+            "default": 2000,
+            "min": 2000,
+            "max": 2000,
+            "unit": "second"
+        },
+        {
+            "name": "step",
+            "default": 10,
+            "min": 10,
+            "max": 10,
+            "unit": ""
+        },
+        {
+            "name": "min_throughput",
+            "default": 0.2,
+            "min": 0.2,
+            "max": 0.2,
+            "unit": "mbps"
+        },
+        {
+            "name": "max_throughput",
+            "default": 4.3,
+            "min": 4.3,
+            "max": 4.3,
+            "unit": "mbps"
+        }
+    ]
+}
+
